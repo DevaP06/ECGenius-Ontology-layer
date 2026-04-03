@@ -1,0 +1,6 @@
+label_id,tier,description,default_action,allow_downgrade
+STEMI,1,Life-threatening emergency,Immediate PCI referral,FALSE
+VF,1,Cardiac arrest,Start ACLS,FALSE
+AF,2,Potentially unstable rhythm,Rate or rhythm control,TRUE
+LVH,3,Chronic structural condition,Outpatient evaluation,TRUE
+NSR,3,Normal finding,No action required,TRUE

@@ -1,0 +1,6 @@
+label_id,snomed_ct,icd10,aha_guideline,notes
+AF,49436004,I48,2019_AHA_AF_Guideline,Consider anticoagulation
+STEMI,57054005,I21,2013_AHA_STEMI_Guideline,Time-critical diagnosis
+LVH,164873001,I51.7,ECG_Interpretation,May show strain pattern
+VF,71908006,I49.01,ACLS_Guidelines,Requires immediate defibrillation
+NSR,Normal,Normal,General,Normal ECG pattern
