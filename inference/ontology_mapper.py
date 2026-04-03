@@ -488,3 +488,4 @@ if __name__ == "__main__":
     print("\n=== JSON output (first result) ===\n")
     if results:
         print(json.dumps(results[0].to_dict(), indent=2))
+        print(json.dumps(results[1].to_dict(), indent=2))
