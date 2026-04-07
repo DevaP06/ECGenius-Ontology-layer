@@ -1,0 +1,10 @@
+symptom,condition,weight
+chest_pain,myocardial_infarction,0.9
+shortness_of_breath,myocardial_infarction,0.7
+dizziness,arrhythmia,0.6
+palpitations,atrial_fibrillation,0.85
+irregular_rhythm,atrial_fibrillation,0.95
+st_elevation,myocardial_infarction,1.0
+st_depression,ischemia,0.8
+bradycardia,arrhythmia,0.7
+tachycardia,arrhythmia,0.75

@@ -1,0 +1,193 @@
+# ECGenius — training/config.yaml
+# ================================
+# Full training configuration for the CNN-Transformer ECG model.
+# All paths are relative to the project root.
+
+# ──────────────────────────────────────────────────────────────
+# Data
+# ──────────────────────────────────────────────────────────────
+data:
+  signals_dir:        data/processed/signals/
+  labels_file:        data/processed/labels/multilabel_targets.csv
+  label_encoder:      data/processed/labels/label_encoder.json
+  train_ids:          data/processed/splits/train_ids.txt
+  val_ids:            data/processed/splits/val_ids.txt
+  test_ids:           data/processed/splits/test_ids.txt
+
+  # Signal spec (must match ECGPreprocessor output)
+  n_leads:            12
+  n_samples:          5000        # 10 sec × 500 Hz
+  target_fs:          500         # Hz
+
+  # DataLoader
+  batch_size:         32
+  num_workers:        4
+  pin_memory:         true
+  prefetch_factor:    2
+
+  # Augmentation (training only)
+  augmentation:
+    enabled:          true
+    gaussian_noise:   0.01        # std of additive noise
+    amplitude_scale:  [0.8, 1.2]  # random amplitude scale range
+    time_shift_max:   50          # samples (100 ms)
+    lead_dropout_p:   0.05        # probability of zeroing a lead
+
+
+# ──────────────────────────────────────────────────────────────
+# Model architecture
+# ──────────────────────────────────────────────────────────────
+model:
+  architecture:       cnn_transformer   # cnn_1d | cnn_transformer
+
+  cnn:
+    channels:         [32, 64, 128, 256]
+    kernel_size:      7
+    stride:           2
+    dropout:          0.2
+
+  transformer:
+    d_model:          256
+    n_heads:          8
+    n_layers:         4
+    dim_feedforward:  512
+    dropout:          0.1
+    max_seq_len:      313           # after CNN downsampling: 5000 / 2^4 ≈ 313
+
+  classifier:
+    hidden_dim:       128
+    dropout:          0.3
+
+  # Set automatically from label_encoder.json at runtime
+  # n_labels:         <auto>
+
+
+# ──────────────────────────────────────────────────────────────
+# Training
+# ──────────────────────────────────────────────────────────────
+training:
+  epochs:             100
+  device:             auto          # auto | cpu | cuda | mps
+
+  optimizer:
+    name:             adamw
+    lr:               1.0e-4
+    weight_decay:     1.0e-4
+    betas:            [0.9, 0.999]
+
+  scheduler:
+    name:             cosine_warmup
+    warmup_epochs:    5
+    min_lr:           1.0e-6
+
+  loss:
+    name:             asymmetric_bce   # handles class imbalance better than BCE
+    gamma_pos:        0.0
+    gamma_neg:        4.0
+    clip:             0.05
+
+  # Class-weighted sampling to handle imbalance (AIIMS data)
+  weighted_sampling:  true
+
+  # Gradient
+  grad_clip:          1.0
+  accumulate_grad:    1             # set >1 if GPU memory limited
+
+  # Mixed precision (speeds up training on modern GPUs)
+  mixed_precision:    true
+
+  # Early stopping
+  early_stopping:
+    enabled:          true
+    patience:         15
+    monitor:          val_auc_macro
+    mode:             max
+
+
+# ──────────────────────────────────────────────────────────────
+# Checkpointing
+# ──────────────────────────────────────────────────────────────
+checkpointing:
+  dir:                models/checkpoints/
+  save_best:          true
+  monitor:            val_auc_macro
+  mode:               max
+  save_every_n:       10            # also save every N epochs regardless
+
+  # What to save inside the checkpoint dict
+  save_optimizer:     true
+  save_scheduler:     true
+  save_config:        true
+
+
+# ──────────────────────────────────────────────────────────────
+# Evaluation metrics
+# ──────────────────────────────────────────────────────────────
+evaluation:
+  # Computed every epoch on val set, every run on test set
+  metrics:
+    - auc_roc_macro
+    - auc_roc_per_label
+    - f1_macro
+    - f1_per_label
+    - precision_macro
+    - recall_macro
+    - specificity_macro
+
+  # Threshold tuning (per-label optimal threshold on val set)
+  threshold_tuning:
+    enabled:          true
+    method:           youden         # youden | f1_optimal | fixed
+    fixed_threshold:  0.5
+
+  # Confusion matrices saved to evaluation/confusion_matrices/
+  save_confusion_matrices: true
+
+
+# ──────────────────────────────────────────────────────────────
+# Logging & experiment tracking
+# ──────────────────────────────────────────────────────────────
+logging:
+  level:              INFO
+  log_dir:            experiments/
+  tensorboard:        true
+  wandb:
+    enabled:          false         # set to true and add your project
+    project:          ecgenius
+    entity:           your-team
+
+  # Log every N training steps
+  log_every_n_steps:  10
+
+
+# ──────────────────────────────────────────────────────────────
+# Ontology integration during training
+# ──────────────────────────────────────────────────────────────
+ontology:
+  dir:                ontology/
+  # Use ontology hierarchy for hierarchical loss weighting
+  # (parent nodes contribute to child label gradients)
+  hierarchical_loss:
+    enabled:          false         # experimental — enable in later evals
+    weight:           0.1
+
+  # Map training labels through ontology to catch naming mismatches
+  validate_labels_on_start: true
+
+
+# ──────────────────────────────────────────────────────────────
+# Reproducibility
+# ──────────────────────────────────────────────────────────────
+reproducibility:
+  seed:               42
+  deterministic:      true          # slower but reproducible
+  benchmark:          false
+
+
+# ──────────────────────────────────────────────────────────────
+# Ethics & data handling
+# ──────────────────────────────────────────────────────────────
+ethics:
+  anonymization_verified: true      # set to true after running anonymization_pipeline.py
+  consent_log:        data/raw/aiims/consent_log.csv
+  data_handling_policy: ethics/data_handling_policy.md

@@ -1,0 +1,33 @@
+{
+  "entities": {
+    "symptoms": [
+      "chest_pain",
+      "shortness_of_breath",
+      "palpitations"
+    ],
+    "ecg_features": [
+      "st_elevation",
+      "irregular_rhythm"
+    ],
+    "lab_results": [
+      "troponin"
+    ],
+    "diseases": [
+      "myocardial_infarction",
+      "atrial_fibrillation",
+      "normal_ecg"
+    ]
+  },
+
+  "relationships": {
+    "myocardial_infarction": {
+      "symptoms": ["chest_pain", "shortness_of_breath"],
+      "ecg_features": ["st_elevation"],
+      "lab_results": ["troponin"]
+    },
+    "atrial_fibrillation": {
+      "symptoms": ["palpitations"],
+      "ecg_features": ["irregular_rhythm"]
+    }
+  }
+}

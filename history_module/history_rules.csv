@@ -1,0 +1,6 @@
+rule_id,rule_type,primary_label,related_labels,action,priority,description
+R1,mutual_exclusion,Normal ECG,"Arrhythmia;ST Elevation;Bradycardia",remove_related,1,If ECG is normal remove abnormal conditions
+R2,mutual_exclusion,ST Elevation,"ST Depression",remove_related,1,ST elevation and depression cannot coexist
+R3,dependency,Myocardial Infarction,"ST Elevation;Troponin High",require_all,2,MI requires ST elevation and high troponin
+R4,boost,Atrial Fibrillation,"Irregular Rhythm",increase_weight,3,Irregular rhythm supports AF diagnosis
+R5,penalty,Normal ECG,"Chest Pain",decrease_weight,3,Chest pain alone doesn’t confirm abnormal ECG
