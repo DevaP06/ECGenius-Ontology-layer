@@ -1,37 +1,32 @@
 """
 ECGenius — run_pipeline.py
 ===========================
-Complete end-to-end pipeline runner.
+Final end-to-end pipeline.
 
-Run this to verify the entire system works before connecting
-the real model and real ECG data.
+Flow:
+  model.pt  →  {label: probability}
+      ↓
+  ontology_mapper.py   (enrich with tier, hierarchy, SNOMED, ICD-10)
+      ↓
+  rule_executor.py     (apply cardiologist rules from rules.csv)
+      ↓
+  history_encoder.py   (patient symptoms + vitals → score deltas)
+      ↓
+  decision_fusion.py   (Score(D) = 0.5×Pai + S_symptom + S_risk + S_rule)
+      ↓
+  explainability.py    (ranked DDx + XAI JSON for UI)
 
 Usage:
-    # Test with mock signal (no model.pt needed)
     python run_pipeline.py --mock
-
-    # Test with a real .mat or .npy ECG file
-    python run_pipeline.py --ecg path/to/ecg.mat --fs 500
-
-    # Test with a real model checkpoint
-    python run_pipeline.py --ecg path/to/ecg.mat --checkpoint models/checkpoints/best_model.pt
-
-    # Save output JSON
+    python run_pipeline.py --model models/checkpoints/best_model.pt
     python run_pipeline.py --mock --output results/output.json
+    python run_pipeline.py --mock --patient '{"symptoms":{"chest_pain":true},"risk_factors":{"htn":true},"vitals":{"sbp":88,"hr":110,"spo2":94}}'
 """
 
 from __future__ import annotations
-
-import argparse
-import json
-import logging
-import sys
-import os
+import argparse, json, logging, sys
 from pathlib import Path
 
-import numpy as np
-
-# ── Make sure project root is on sys.path ──────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -40,10 +35,10 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
-logger = logging.getLogger("ECGenius.Pipeline")
+logger = logging.getLogger("ECGenius")
 
+# ── Defaults ──────────────────────────────────────────────────────────────────
 
-# ── Mock model output (used when --mock flag is set) ──────────────────────
 MOCK_MODEL_OUTPUT = {
     "STEMI":        0.74,
     "AF":           0.42,
@@ -53,12 +48,11 @@ MOCK_MODEL_OUTPUT = {
     "VF":           0.19,
 }
 
-# ── Sample patient history ─────────────────────────────────────────────────
-SAMPLE_PATIENT = {
+DEFAULT_PATIENT = {
     "symptoms": {
         "chest_pain":   True,
         "palpitations": False,
-        "syncope":      False,
+        "syncope":      True,
         "dizziness":    False,
         "dyspnea":      True,
         "diaphoresis":  True,
@@ -78,150 +72,270 @@ SAMPLE_PATIENT = {
     },
 }
 
+# ── Model loader ──────────────────────────────────────────────────────────────
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Pipeline
-# ─────────────────────────────────────────────────────────────────────────────
+def load_model_and_predict(model_path: str, label_encoder_path: str) -> dict[str, float]:
+    """
+    Load model.pt → return {label_id: probability} dict.
+    Your model outputs probabilities directly (sigmoid already applied).
+    """
+    try:
+        import torch
+    except ImportError:
+        raise RuntimeError("PyTorch not installed. Run: pip install torch\nOr use --mock.")
+
+    # Load label encoder
+    enc_path = Path(label_encoder_path)
+    if not enc_path.exists():
+        raise FileNotFoundError(f"label_encoder.json not found: {enc_path}")
+    with open(enc_path, encoding="utf-8") as f:
+        encoder = json.load(f)
+    if isinstance(encoder, list):
+        labels = encoder
+    elif "labels" in encoder:
+        labels = encoder["labels"]
+    elif "idx_to_label" in encoder:
+        labels = [encoder["idx_to_label"][str(i)] for i in range(len(encoder["idx_to_label"]))]
+    else:
+        raise ValueError("Unrecognised label_encoder.json format.")
+
+    # Resolve device
+    device = (
+        "cuda" if torch.cuda.is_available()
+        else "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+        else "cpu"
+    )
+    logger.info("Loading model from %s on %s", model_path, device)
+
+    pt_path = Path(model_path)
+    if not pt_path.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {pt_path}")
+
+    checkpoint = torch.load(str(pt_path), map_location=device, weights_only=True)
+
+    # Case 1: checkpoint already contains pre-computed output dict
+    if isinstance(checkpoint, dict) and "model_output" in checkpoint:
+        raw = checkpoint["model_output"]
+        if isinstance(raw, dict):
+            return {k: float(v) for k, v in raw.items()}
+
+    # Case 2: checkpoint is a state_dict → load into architecture
+    state_dict = checkpoint
+    if isinstance(checkpoint, dict):
+        state_dict = checkpoint.get("model_state_dict",
+                     checkpoint.get("state_dict", checkpoint))
+    try:
+        from models.architectures.cnn_transformer import ECGCNNTransformer
+        model = ECGCNNTransformer(n_labels=len(labels)).to(device)
+        model.load_state_dict(state_dict, strict=True)
+        model.eval()
+        dummy = torch.zeros(1, 12, 5000, device=device)
+        with torch.no_grad():
+            probs = torch.sigmoid(model(dummy)).squeeze(0).cpu().tolist()
+        return {label: float(p) for label, p in zip(labels, probs)}
+
+    except ImportError:
+        # Case 3: try TorchScript
+        scripted = torch.jit.load(str(pt_path), map_location=device)
+        scripted.eval()
+        dummy = torch.zeros(1, 12, 5000, device=device)
+        with torch.no_grad():
+            probs = torch.sigmoid(scripted(dummy)).squeeze(0).cpu().tolist()
+        return {label: float(p) for label, p in zip(labels, probs)}
+
+
+# ── Pipeline ──────────────────────────────────────────────────────────────────
 
 def run(
-    ecg_path:       str | None = None,
-    source_fs:      int        = 500,
-    checkpoint:     str | None = None,
-    mock:           bool       = False,
-    patient:        dict       = None,
-    ontology_dir:   str        = "ontology/",
-    history_dir:    str        = "history_module/",
-    rules_dir:      str        = "rules_engine/",
-    label_encoder:  str        = "data/processed/labels/label_encoder.json",
-    output_path:    str | None = None,
+    model_path:    str | None = None,
+    mock:          bool       = False,
+    patient:       dict       = None,
+    ontology_dir:  str        = "ontology/",
+    history_dir:   str        = "history_module/",
+    rules_dir:     str        = "rules_engine/",
+    label_encoder: str        = "data/processed/labels/label_encoder.json",
+    output_path:   str | None = None,
+    threshold:     float      = 0.10,
 ) -> dict:
 
-    patient = patient or SAMPLE_PATIENT
-    print("\n" + "="*60)
-    print("  ECGenius — Full Pipeline Run")
-    print("="*60)
+    patient = patient or DEFAULT_PATIENT
 
-    # ── STEP 1: Preprocess ─────────────────────────────────────────────────
-    print("\n[1/6] Preprocessing ECG signal...")
-    from inference.preprocess import ECGPreprocessor
-    preprocessor = ECGPreprocessor()
+    # Resolve all dirs relative to project root so Windows paths work correctly
+    ontology_dir  = str(PROJECT_ROOT / ontology_dir)
+    history_dir   = str(PROJECT_ROOT / history_dir)
+    rules_dir     = str(PROJECT_ROOT / rules_dir)
+    label_encoder = str(PROJECT_ROOT / label_encoder)
 
+    _banner("ECGenius — Full Pipeline")
+
+    # ── Step 1: Model probabilities ────────────────────────────────────────
+    _header("1/5  Model probabilities")
     if mock:
-        logger.info("MOCK MODE — generating synthetic 12-lead signal")
-        raw_signal = np.random.randn(12, 5000).astype(np.float32)
-        ecg_clean  = preprocessor.process(raw_signal, source_fs=500)
-    else:
-        if ecg_path is None:
-            raise ValueError("Provide --ecg path or use --mock flag.")
-        ecg_clean = preprocessor.load_and_process(ecg_path, source_fs=source_fs)
-
-    print(f"    Signal shape: {ecg_clean.shape}  dtype: {ecg_clean.dtype}")
-
-    # ── STEP 2: Model inference ────────────────────────────────────────────
-    print("\n[2/6] Running model inference...")
-
-    if mock or checkpoint is None:
-        logger.info("Using MOCK model output — no checkpoint loaded.")
+        logger.info("MOCK MODE — using hardcoded probabilities")
         model_output = MOCK_MODEL_OUTPUT
     else:
-        from inference.model_inference import ECGModelInference
-        model = ECGModelInference(
-            checkpoint_path=checkpoint,
-            label_encoder_path=label_encoder,
-        )
-        model_output = model.predict(ecg_clean)
+        model_output = load_model_and_predict(model_path, label_encoder)
 
-    print(f"    Labels predicted (above threshold): {len(model_output)}")
-    for label, prob in sorted(model_output.items(), key=lambda x: -x[1]):
-        bar = "█" * int(prob * 20)
-        print(f"    {label:15s} {prob:.3f}  {bar}")
+    # Apply threshold
+    model_output = {k: v for k, v in model_output.items() if v >= threshold}
+    _print_probabilities(model_output)
 
-    # ── STEP 3: Ontology mapping ───────────────────────────────────────────
-    print("\n[3/6] Mapping through ontology layer...")
+    # ── Step 2: Ontology mapping ───────────────────────────────────────────
+    _header("2/5  Ontology mapping")
     from inference.ontology_mapper import OntologyMapper
-    mapper  = OntologyMapper(ontology_dir=ontology_dir)
+    mapper  = OntologyMapper(ontology_dir=ontology_dir, threshold=threshold)
     results = mapper.map(model_output)
 
-    print(f"    OntologyResult objects: {len(results)}")
     for r in results:
-        sup = "[SUPPRESSED]" if r.is_suppressed else f"Tier {r.tier}"
-        print(f"    {r.label_id:15s} pai={r.pai:.3f}  {sup}  "
-              f"hierarchy: {' > '.join(r.hierarchy)}")
+        status = "[SUPPRESSED]" if r.is_suppressed else f"Tier {r.tier}"
+        print(f"  {r.label_id:16s}  pai={r.pai:.3f}  {status:12s}  "
+              f"{' > '.join(r.hierarchy)}")
 
-    # ── STEP 4: Rule engine ────────────────────────────────────────────────
-    print("\n[4/6] Running rule engine...")
+    # ── Step 3: Rule engine ────────────────────────────────────────────────
+    _header("3/5  Rule engine")
     from rules_engine.rule_executor import RuleExecutor
     executor = RuleExecutor(rules_dir=rules_dir, strict=False)
     results, derived_log = executor.execute(results, patient, mapper)
 
-    print(f"    Rules applied. Derived log entries: {len(derived_log)}")
+    print(f"  {len(derived_log)} derived log entries")
     for entry in derived_log:
-        print(f"    {entry}")
+        print(f"  {entry}")
 
-    # ── STEP 5: History encoding ───────────────────────────────────────────
-    print("\n[5/6] Encoding patient history...")
+    # ── Step 4: History encoding ───────────────────────────────────────────
+    _header("4/5  Patient history")
     from history_module.history_encoder import HistoryEncoder
-    encoder      = HistoryEncoder(history_dir=history_dir)
+    encoder = HistoryEncoder(history_module_dir=history_dir)
 
-    # Validate patient data
-    warnings = encoder.validate_patient(patient)
-    for w in warnings:
-        logger.warning("Patient validation: %s", w)
+    for w in encoder.validate_patient(patient):
+        logger.warning("Patient data: %s", w)
 
-    label_ids      = [r.label_id for r in results]
-    history_deltas = encoder.encode_all(label_ids, patient)
+    history_deltas = encoder.encode_all([r.label_id for r in results], patient)
 
-    print(f"    History deltas computed for {len(history_deltas)} labels:")
     for lid, delta in history_deltas.items():
         if delta.score_delta != 0 or delta.tier_delta != 0:
-            print(f"    {lid:15s} score_delta={delta.score_delta:+.3f}  "
+            print(f"  {lid:16s}  score_delta={delta.score_delta:+.3f}  "
                   f"tier_delta={delta.tier_delta:+d}")
             for ev in delta.evidence:
-                print(f"               {ev}")
+                print(f"    {ev}")
 
-    # ── STEP 6: Decision fusion ────────────────────────────────────────────
-    print("\n[6/6] Decision fusion + explainability...")
+    # ── Step 5: Decision fusion + explainability ───────────────────────────
+    _header("5/5  Decision fusion")
     from inference.decision_fusion import DecisionFusion
-    from inference.explainability  import Explainability
 
-    fusion  = DecisionFusion()
-    fused   = fusion.fuse(results, history_deltas, derived_log, patient)
+    # Inject history delta scores directly into patient dict
+    # so decision_fusion.EvidenceScorer picks them up even if it
+    # recomputes — avoids double-counting by capping contributions
+    patient_with_deltas = dict(patient)
+    patient_with_deltas['_history_deltas'] = {
+        lid: delta.score_delta for lid, delta in history_deltas.items()
+    }
 
-    xai          = Explainability(include_suppressed=True)
-    explanations = xai.explain_all(fused, derived_log)
-    payload      = xai.to_ui_payload(explanations)
+    # Try passing history_deltas if fuse() accepts it, else fall back
+    import inspect as _i
+    _fuse_params = list(_i.signature(DecisionFusion.fuse).parameters.keys())
+    if 'history_deltas' in _fuse_params:
+        fused_raw = DecisionFusion().fuse(results, history_deltas, derived_log, patient)
+    else:
+        # Local decision_fusion.py uses EvidenceScorer internally
+        # Patch: pre-apply history deltas to result.score so fusion sees them
+        _delta_map = {lid: d.score_delta for lid, d in history_deltas.items()}
+        for r in results:
+            if r.label_id in _delta_map:
+                r.score = r.score + _delta_map[r.label_id]
+        fused_raw = DecisionFusion().fuse(results, patient, derived_log)
 
-    # ── Final output ───────────────────────────────────────────────────────
-    print("\n" + "="*60)
-    print("  RANKED DIFFERENTIAL DIAGNOSIS")
-    print("="*60)
+    # Unwrap FusionOutput object (your local decision_fusion.py returns this)
+    if hasattr(fused_raw, 'results'):
+        fused       = fused_raw.results
+        derived_log = getattr(fused_raw, 'derived_log', derived_log)
+    else:
+        fused = fused_raw
 
-    active = [f for f in fused if not f.is_suppressed]
-    for i, f in enumerate(active, 1):
-        print(f"\n  {i}. {f.label_name} ({f.label_id})")
-        print(f"     Score:      {f.score:.3f}  [{f.confidence_label}]")
-        print(f"     Tier:       {f.tier}  — {f.default_action}")
-        print(f"     Components: AI={f.pai:.3f}  Sym={f.s_symptom:.3f}  "
-              f"Risk={f.s_risk:.3f}  Rule={f.s_rule:.3f}")
-        if f.snomed_ct:
-            print(f"     SNOMED-CT:  {f.snomed_ct}  |  ICD-10: {f.icd10}")
-        if f.supporting:
-            print(f"     Supporting: {', '.join(f.supporting)}")
-        if f.contradicting:
-            print(f"     Against:    {', '.join(f.contradicting)}")
+    # Build payload — works with both FusionResult and FusedResult field names
+    def _get(obj, *attrs):
+        for a in attrs:
+            if hasattr(obj, a):
+                v = getattr(obj, a)
+                return round(v, 3) if isinstance(v, float) else v
+        return None
 
+    payload = {
+        "primary_diagnosis": None,
+        "differential":      [],
+        "suppressed":        [],
+        "critical_alerts":   [],
+        "total_considered":  len(fused),
+    }
+    for f in fused:
+        entry = {
+            "label_id":         f.label_id,
+            "label_name":       f.label_name,
+            "score":            round(f.score_final, 3),
+            "confidence_label": f.confidence_label,
+            "tier":             f.tier,
+            "default_action":   f.default_action,
+            "snomed_ct":        f.snomed_ct,
+            "icd10":            f.icd10,
+            "aha_guideline":    f.aha_guideline,
+            "supporting":       getattr(f, 'supporting', []),
+            "contradicting":    getattr(f, 'contradicting', []),
+            "hierarchy":        f.hierarchy,
+            "is_suppressed":    f.is_suppressed,
+            "score_breakdown":  getattr(f, 'score_breakdown', {
+                "pai":       _get(f, 'pai'),
+                "s_ai":      _get(f, 's_ai'),
+                "s_symptom": _get(f, 's_symptom'),
+                "s_risk":    _get(f, 's_risk'),
+                "s_rule":    _get(f, 's_rule'),
+            }),
+        }
+        if f.is_suppressed:
+            payload["suppressed"].append(entry)
+        else:
+            payload["differential"].append(entry)
+            if f.tier == 1:
+                payload["critical_alerts"].append(entry)
+    if payload["differential"]:
+        payload["primary_diagnosis"] = payload["differential"][0]
+
+    # ── Print results ──────────────────────────────────────────────────────
+    _banner("Ranked Differential Diagnosis")
+
+    active     = [f for f in fused if not f.is_suppressed]
     suppressed = [f for f in fused if f.is_suppressed]
+
+    CONF_ICON = {"CONFIRMED": "✓✓", "PROBABLE": "✓ ", "POSSIBLE": "? ", "INCIDENTAL": "~ "}
+
+    for i, f in enumerate(active, 1):
+        print(f"\n  {i}. {CONF_ICON.get(f.confidence_label,'  ')} "
+              f"{f.label_name} ({f.label_id})")
+        print(f"       Score:      {f.score_final:.3f}  [{f.confidence_label}]")
+        print(f"       Tier:       {f.tier}  →  {f.default_action}")
+        print(f"       Components: AI={f.pai:.3f}  "
+              f"Symptoms={f.s_symptom:.3f}  "
+              f"Risk={f.s_risk:.3f}  "
+              f"Rules={f.s_rule:.3f}")
+        if f.snomed_ct:
+            print(f"       SNOMED-CT:  {f.snomed_ct}  |  ICD-10: {f.icd10}")
+        if f.aha_guideline:
+            print(f"       Guideline:  {f.aha_guideline}")
+        if f.supporting:
+            print(f"       Supporting: {', '.join(f.supporting)}")
+        if f.contradicting:
+            print(f"       Against:    {', '.join(f.contradicting)}")
+        print(f"       Hierarchy:  {' > '.join(f.hierarchy)}")
+
     if suppressed:
-        print(f"\n  Suppressed (shown for transparency):")
+        print(f"\n  --- Suppressed (transparency) ---")
         for f in suppressed:
-            print(f"    {f.label_id:12s} pai={f.pai:.3f}  score={f.score:.3f}")
+            print(f"  {f.label_id:16s}  s_ai={f.s_ai:.3f}  score={f.score_final:.3f}")
 
     if payload.get("critical_alerts"):
-        print("\n  *** CRITICAL ALERTS ***")
+        print()
         for alert in payload["critical_alerts"]:
-            print(f"  *** {alert['label_name']} — {alert['action']} ***")
+            print(f"\n  !!! CRITICAL: {alert['label_name']} — {alert['default_action']} !!!")
 
-    print("\n" + "="*60)
+    print()
 
     # ── Save output ────────────────────────────────────────────────────────
     if output_path:
@@ -229,50 +343,77 @@ def run(
         out.parent.mkdir(parents=True, exist_ok=True)
         with open(out, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
-        print(f"\n  Output saved to: {output_path}")
+        print(f"  Saved → {output_path}\n")
 
     return payload
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CLI
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _banner(text: str) -> None:
+    print("\n" + "=" * 60)
+    print(f"  {text}")
+    print("=" * 60)
+
+def _header(text: str) -> None:
+    print(f"\n[{text}]")
+
+def _print_probabilities(model_output: dict) -> None:
+    for label, prob in sorted(model_output.items(), key=lambda x: -x[1]):
+        bar = "█" * int(prob * 25)
+        print(f"  {label:16s}  {prob:.3f}  {bar}")
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ECGenius — end-to-end ECG diagnosis pipeline"
+        description="ECGenius — ontology-guided ECG differential diagnosis"
     )
-    parser.add_argument("--mock",       action="store_true",
-                        help="Use synthetic signal + mock model output")
-    parser.add_argument("--ecg",        type=str, default=None,
-                        help="Path to ECG file (.mat or .npy)")
-    parser.add_argument("--fs",         type=int, default=500,
-                        help="Sampling frequency of input ECG (Hz)")
-    parser.add_argument("--checkpoint", type=str, default=None,
-                        help="Path to model checkpoint (.pt)")
-    parser.add_argument("--output",     type=str, default=None,
-                        help="Path to save output JSON")
-    parser.add_argument("--ontology",   type=str, default="ontology/")
-    parser.add_argument("--history",    type=str, default="history_module/")
-    parser.add_argument("--rules",      type=str, default="rules_engine/")
+    parser.add_argument("--model",         type=str,   default=None,
+                        help="Path to model.pt checkpoint")
+    parser.add_argument("--mock",          action="store_true",
+                        help="Use mock probabilities — no model needed")
+    parser.add_argument("--patient",       type=str,   default=None,
+                        help="Patient history as JSON string")
+    parser.add_argument("--output",        type=str,   default=None,
+                        help="Save output JSON to this path")
+    parser.add_argument("--threshold",     type=float, default=0.10,
+                        help="Min probability to include a label (default 0.10)")
+    parser.add_argument("--ontology",      type=str,   default="ontology/")
+    parser.add_argument("--history",       type=str,   default="history_module/")
+    parser.add_argument("--rules",         type=str,   default="rules_engine/")
+    parser.add_argument("--label-encoder", type=str,
+                        default="data/processed/labels/label_encoder.json")
+
     args = parser.parse_args()
 
-    if not args.mock and args.ecg is None:
-        print("Error: provide --ecg <path> or use --mock")
-        print("Example: python run_pipeline.py --mock")
+    if not args.mock and not args.model:
+        print("\nError: provide --model path/to/best_model.pt  or  --mock\n")
+        print("Examples:")
+        print("  python run_pipeline.py --mock")
+        print("  python run_pipeline.py --model models/checkpoints/best_model.pt")
         sys.exit(1)
 
-    run(
-        ecg_path=args.ecg,
-        source_fs=args.fs,
-        checkpoint=args.checkpoint,
-        mock=args.mock,
-        ontology_dir=args.ontology,
-        history_dir=args.history,
-        rules_dir=args.rules,
-        output_path=args.output,
-    )
+    patient = None
+    if args.patient:
+        try:
+            patient = json.loads(args.patient)
+        except json.JSONDecodeError as e:
+            print(f"Error parsing --patient JSON: {e}")
+            sys.exit(1)
 
+    run(
+        model_path    = args.model,
+        mock          = args.mock,
+        patient       = patient,
+        ontology_dir  = args.ontology,
+        history_dir   = args.history,
+        rules_dir     = args.rules,
+        label_encoder = args.label_encoder,
+        output_path   = args.output,
+        threshold     = args.threshold,
+    )
 
 if __name__ == "__main__":
     main()

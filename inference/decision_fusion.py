@@ -1,30 +1,28 @@
 """
 ECGenius — inference/decision_fusion.py
 ========================================
-Final scoring engine. Takes fully enriched + rule-processed
-OntologyResult objects and produces the ranked differential
-diagnosis list with confidence labels and clinical actions.
+Final scoring engine.
 
-Scoring formula (from your research):
+Scoring formula (from your PPT research):
   Score(D) = (0.5 × Pai(D)) + S_symptom + S_risk + S_rule
 
-  Component         Max contribution
-  ─────────────────────────────────
-  AI model          0.50  (0.5 × Pai(D) ∈ [0,1])
-  Symptoms          0.30
-  Risk factors      0.10
-  Clinical rules    0.10  (already applied by rule_executor)
-  ─────────────────────────────────
-  Total max         1.00
+  Component         Source                          Cap
+  ─────────────────────────────────────────────────────
+  AI model          0.5 × Pai(D) from model.pt      0.50
+  Symptoms          history_encoder HistoryDelta     0.30
+  Risk factors      history_encoder HistoryDelta     0.10
+  Clinical rules    rule_executor score delta        0.10
+  ─────────────────────────────────────────────────────
+  Total max                                          1.00
+
+Single source of truth for symptom/risk weights = history_rules.csv
+No EvidenceScorer, no symptom_weights.csv needed.
 
 Confidence thresholds:
-  ≥ 0.80  →  CONFIRMED
-  0.60–0.79  →  PROBABLE
-  0.30–0.59  →  POSSIBLE
-  < 0.30  →  INCIDENTAL
-
-Output: FusionResult — the final DDx object handed to
-explainability.py and the clinician UI.
+  >= 0.80  →  CONFIRMED
+  0.60-0.79 →  PROBABLE
+  0.30-0.59 →  POSSIBLE
+  < 0.30   →  INCIDENTAL
 """
 
 from __future__ import annotations
@@ -32,20 +30,15 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Score weight constants — change here, nowhere else
-# ---------------------------------------------------------------------------
-
-W_AI       = 0.50   # weight on Pai(D)
-MAX_SYMPTOM = 0.30
-MAX_RISK    = 0.10
-# Rule/history deltas already baked into result.score by rule_executor
+# ── Score caps ────────────────────────────────────────────────────────────────
+W_AI        = 0.50
+CAP_SYMPTOM = 0.30
+CAP_RISK    = 0.10
+CAP_RULE    = 0.10
 
 CONFIDENCE_BANDS = [
     (0.80, "CONFIRMED"),
@@ -57,283 +50,212 @@ CONFIDENCE_BANDS = [
 TIER_LABELS = {1: "life-threatening", 2: "urgent", 3: "routine"}
 
 
-# ---------------------------------------------------------------------------
-# Output dataclass
-# ---------------------------------------------------------------------------
+# ── Output dataclass ──────────────────────────────────────────────────────────
 
 @dataclass
 class FusionResult:
-    """
-    Final ranked diagnosis — everything the UI and explainability
-    layer needs in one object.
-    """
-    rank: int                        # 1 = most likely
-    label_id: str
-    label_name: str
-    category: str
-    hierarchy: list[str]
+    """Final ranked diagnosis — everything the UI needs in one object."""
+    rank:             int
+    label_id:         str
+    label_name:       str
+    category:         str
+    description:      str
+    hierarchy:        list[str]
 
-    # Score breakdown (for XAI)
-    pai: float                       # raw AI probability
-    s_ai: float                      # 0.5 × pai
-    s_symptom: float                 # symptom contribution
-    s_risk: float                    # risk factor contribution
-    s_rule: float                    # rule/history delta already applied
-    score_final: float               # clamped sum
-    confidence_label: str            # CONFIRMED / PROBABLE / POSSIBLE / INCIDENTAL
+    # Score breakdown (kept separate for XAI transparency)
+    pai:              float   # raw AI probability
+    s_ai:             float   # 0.5 × pai
+    s_symptom:        float   # from history_encoder (symptom triggers)
+    s_risk:           float   # from history_encoder (risk factor triggers)
+    s_rule:           float   # from rule_executor delta
+    score_final:      float   # clamped final Score(D)
+    confidence_label: str
 
-    # Clinical action
-    tier: int
-    tier_label: str
-    default_action: str
-    allow_downgrade: bool
+    # Triage
+    tier:             int
+    tier_label:       str
+    default_action:   str
+    allow_downgrade:  bool
 
     # Terminology
-    snomed_ct: str
-    icd10: str
-    aha_guideline: str
-    clinical_notes: str
+    snomed_ct:        str
+    icd10:            str
+    aha_guideline:    str
+    clinical_notes:   str
 
     # Flags
-    is_suppressed: bool
-    derived: bool = False            # True if injected by derived rule
+    is_suppressed:    bool
+    is_derived:       bool = False
 
-    # XAI narrative (populated by explainability.py)
-    explanation: str = ""
+    # XAI evidence (from history_encoder)
+    supporting:       list[str] = field(default_factory=list)
+    contradicting:    list[str] = field(default_factory=list)
+    evidence_log:     list[str] = field(default_factory=list)
+
+    # Filled by explainability.py later
+    explanation:      str = ""
 
     def to_dict(self) -> dict:
         return {
-            "rank": self.rank,
-            "label_id": self.label_id,
-            "label_name": self.label_name,
-            "category": self.category,
-            "hierarchy": self.hierarchy,
+            "rank":             self.rank,
+            "label_id":         self.label_id,
+            "label_name":       self.label_name,
+            "category":         self.category,
+            "hierarchy":        self.hierarchy,
             "score_breakdown": {
-                "pai":       round(self.pai, 4),
-                "s_ai":      round(self.s_ai, 4),
-                "s_symptom": round(self.s_symptom, 4),
-                "s_risk":    round(self.s_risk, 4),
-                "s_rule":    round(self.s_rule, 4),
-                "total":     round(self.score_final, 4),
+                "pai":        round(self.pai, 4),
+                "s_ai":       round(self.s_ai, 4),
+                "s_symptom":  round(self.s_symptom, 4),
+                "s_risk":     round(self.s_risk, 4),
+                "s_rule":     round(self.s_rule, 4),
+                "total":      round(self.score_final, 4),
             },
             "confidence_label": self.confidence_label,
-            "tier": self.tier,
-            "tier_label": self.tier_label,
-            "default_action": self.default_action,
-            "allow_downgrade": self.allow_downgrade,
-            "snomed_ct": self.snomed_ct,
-            "icd10": self.icd10,
-            "aha_guideline": self.aha_guideline,
-            "clinical_notes": self.clinical_notes,
-            "is_suppressed": self.is_suppressed,
-            "derived": self.derived,
-            "explanation": self.explanation,
+            "tier":             self.tier,
+            "tier_label":       self.tier_label,
+            "default_action":   self.default_action,
+            "snomed_ct":        self.snomed_ct,
+            "icd10":            self.icd10,
+            "aha_guideline":    self.aha_guideline,
+            "clinical_notes":   self.clinical_notes,
+            "is_suppressed":    self.is_suppressed,
+            "is_derived":       self.is_derived,
+            "supporting":       self.supporting,
+            "contradicting":    self.contradicting,
+            "evidence_log":     self.evidence_log,
+            "explanation":      self.explanation,
         }
 
 
 @dataclass
 class FusionOutput:
-    """Top-level output handed to the UI / explainability layer."""
-    patient_id: str
-    results: list[FusionResult]          # all labels, sorted
-    active_results: list[FusionResult]   # non-suppressed only
-    top_diagnosis: Optional[FusionResult]
-    critical_alerts: list[FusionResult]  # Tier-1 CONFIRMED/PROBABLE labels
-    derived_log: list[str]               # from rule_executor
-    metadata: dict = field(default_factory=dict)
+    """Top-level output handed to UI and explainability layer."""
+    patient_id:      str
+    results:         list[FusionResult]
+    active_results:  list[FusionResult]
+    top_diagnosis:   Optional[FusionResult]
+    critical_alerts: list[FusionResult]
+    derived_log:     list[str]
+    metadata:        dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
-            "patient_id": self.patient_id,
-            "top_diagnosis": self.top_diagnosis.to_dict() if self.top_diagnosis else None,
+            "patient_id":      self.patient_id,
+            "top_diagnosis":   self.top_diagnosis.to_dict() if self.top_diagnosis else None,
             "critical_alerts": [r.to_dict() for r in self.critical_alerts],
-            "active_results": [r.to_dict() for r in self.active_results],
-            "all_results": [r.to_dict() for r in self.results],
-            "derived_log": self.derived_log,
-            "metadata": self.metadata,
+            "active_results":  [r.to_dict() for r in self.active_results],
+            "all_results":     [r.to_dict() for r in self.results],
+            "derived_log":     self.derived_log,
+            "metadata":        self.metadata,
         }
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent)
 
 
-# ---------------------------------------------------------------------------
-# Symptom / risk score helper
-# ---------------------------------------------------------------------------
-
-class EvidenceScorer:
-    """
-    Converts patient history into per-label score contributions.
-
-    Uses symptom_weights.csv (from history_module/) if available,
-    otherwise falls back to uniform weights.
-
-    symptom_weights.csv schema:
-        label_id, symptom_id, weight
-        STEMI, chest_pain, 0.20
-        STEMI, dyspnea,    0.08
-        AF,    palpitations, 0.15
-        ...
-    """
-
-    def __init__(self, weights_path: Optional[Path] = None):
-        self._symptom_weights: dict[str, dict[str, float]] = {}
-        self._risk_weights: dict[str, dict[str, float]] = {}
-
-        if weights_path and Path(weights_path).exists():
-            self._load_weights(Path(weights_path))
-        else:
-            logger.info(
-                "EvidenceScorer: no symptom_weights.csv found — "
-                "using uniform fallback weights."
-            )
-
-    def _load_weights(self, path: Path) -> None:
-        import csv
-        with open(path, newline="", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                label   = row["label_id"].strip()
-                symptom = row["symptom_id"].strip()
-                weight  = float(row.get("weight", 0.05))
-                bucket  = row.get("bucket", "symptom").strip().lower()
-
-                if bucket == "risk":
-                    self._risk_weights.setdefault(label, {})[symptom] = weight
-                else:
-                    self._symptom_weights.setdefault(label, {})[symptom] = weight
-
-        logger.info(
-            "EvidenceScorer: loaded weights for %d labels",
-            len(self._symptom_weights) + len(self._risk_weights),
-        )
-
-    def symptom_score(self, label_id: str, patient: dict) -> float:
-        """
-        Returns S_symptom ∈ [0, MAX_SYMPTOM].
-        Sums weights of present symptoms for this label.
-        Falls back to 0.05 per present symptom if no weights loaded.
-        """
-        symptoms = patient.get("symptoms", {})
-        weights  = self._symptom_weights.get(label_id, {})
-        total    = 0.0
-
-        if weights:
-            for sym_id, w in weights.items():
-                if symptoms.get(sym_id):
-                    total += w
-        else:
-            # Uniform fallback: 0.05 per present symptom, capped
-            present_count = sum(1 for v in symptoms.values() if v)
-            total = min(present_count * 0.05, MAX_SYMPTOM)
-
-        return min(total, MAX_SYMPTOM)
-
-    def risk_score(self, label_id: str, patient: dict) -> float:
-        """
-        Returns S_risk ∈ [0, MAX_RISK].
-        """
-        risk_factors = patient.get("risk_factors", {})
-        weights      = self._risk_weights.get(label_id, {})
-        total        = 0.0
-
-        if weights:
-            for rf_id, w in weights.items():
-                if risk_factors.get(rf_id):
-                    total += w
-        else:
-            present_count = sum(1 for v in risk_factors.values() if v)
-            total = min(present_count * 0.02, MAX_RISK)
-
-        return min(total, MAX_RISK)
-
-
-# ---------------------------------------------------------------------------
-# Main class
-# ---------------------------------------------------------------------------
+# ── Main class ────────────────────────────────────────────────────────────────
 
 class DecisionFusion:
     """
-    Combines AI model output + ontology + history + rule deltas
-    into a final ranked differential diagnosis.
+    Combines AI output + ontology + history deltas into ranked DDx.
 
-    Parameters
-    ----------
-    weights_path : Path | None
-        Path to history_module/symptom_weights.csv
-    min_score_to_include : float
-        FusionResults below this score are still returned but
-        labelled INCIDENTAL. Set to 0.0 to include all.
+    history_rules.csv is the ONLY source of symptom/risk weights.
+    history_encoder.py computes HistoryDelta per label.
+    This class just splits that delta into s_symptom and s_risk.
+    No separate weight file needed.
     """
-
-    def __init__(
-        self,
-        weights_path: Optional[Path] = None,
-        min_score_to_include: float = 0.0,
-    ):
-        self.scorer = EvidenceScorer(weights_path)
-        self.min_score = min_score_to_include
 
     def fuse(
         self,
-        ontology_results: list,           # list[OntologyResult] from rule_executor
-        patient: dict,                    # from history_encoder
-        derived_log: list[str],           # from rule_executor
-        patient_id: str = "unknown",
+        ontology_results: list,             # list[OntologyResult] from rule_executor
+        history_deltas:   dict,             # {label_id: HistoryDelta} from history_encoder
+        derived_log:      list[str],        # from rule_executor
+        patient:          dict = None,      # raw patient dict (for context only)
+        patient_id:       str  = "unknown",
     ) -> FusionOutput:
         """
-        Main entry point.
-
         Parameters
         ----------
         ontology_results : list[OntologyResult]
-            After ontology_mapper + rule_executor have run.
-            result.score may already have rule deltas baked in.
-
-        patient : dict
-            {"symptoms": {...}, "risk_factors": {...}, "vitals": {...}}
-
+            After ontology_mapper + rule_executor. result.score holds
+            any rule delta already applied by rule_executor.
+        history_deltas : dict[str, HistoryDelta]
+            From history_encoder.encode_all(). Contains score_delta,
+            tier_delta, supporting, contradicting, evidence lists.
         derived_log : list[str]
-            Human-readable log from rule_executor for XAI.
-
+            XAI log from rule_executor.
+        patient : dict
+            Raw patient dict — used for context only, not for scoring.
         patient_id : str
-            For traceability in the output JSON.
+            For traceability in output JSON.
 
         Returns
         -------
         FusionOutput
         """
-        fusion_results = []
+        patient    = patient or {}
+        results_out = []
 
         for result in ontology_results:
-            # ── Score components ──────────────────────────────────────
-            s_ai      = W_AI * result.pai
-            s_symptom = self.scorer.symptom_score(result.label_id, patient)
-            s_risk    = self.scorer.risk_score(result.label_id, patient)
+            delta = history_deltas.get(result.label_id)
 
-            # rule_executor already wrote deltas into result.score
-            # result.score starts at 0 and gets rule/history deltas
-            s_rule = result.score   # whatever rule_executor accumulated
+            # ── Component 1: AI model ──────────────────────────────────
+            s_ai = round(W_AI * result.pai, 4)
 
-            raw_total = s_ai + s_symptom + s_risk + s_rule
-            score_final = round(min(max(raw_total, 0.0), 1.0), 4)
+            # ── Component 2 & 3: Symptoms + Risk from history_encoder ──
+            # Split the single score_delta into symptom vs risk portions
+            # based on what triggers fired (supporting list tells us which)
+            s_symptom, s_risk = self._split_delta(delta, patient)
 
-            confidence = self._confidence_label(score_final)
+            # ── Component 4: Rule engine delta ─────────────────────────
+            # rule_executor wrote its delta into result.score
+            s_rule = round(
+                min(CAP_RULE, max(-CAP_RULE, result.score)),
+                4,
+            )
 
-            fr = FusionResult(
-                rank=0,   # filled in after sort
+            # ── Final score ────────────────────────────────────────────
+            raw   = s_ai + s_symptom + s_risk + s_rule
+            score = round(min(max(raw, 0.0), 1.0), 4)
+
+            confidence = self._confidence_label(score)
+
+            # ── Tier adjustment from history ───────────────────────────
+            tier = result.tier
+            if delta and delta.tier_delta != 0:
+                if result.allow_downgrade or delta.tier_delta < 0:
+                    tier = max(1, min(3, result.tier + delta.tier_delta))
+
+            # Safety: Tier-1 labels can never be INCIDENTAL
+            if tier == 1 and confidence == "INCIDENTAL":
+                logger.warning(
+                    "Safety override: Tier-1 '%s' score=%.3f elevated to POSSIBLE.",
+                    result.label_id, score,
+                )
+                confidence = "POSSIBLE"
+
+            # ── XAI evidence ───────────────────────────────────────────
+            supporting    = delta.supporting    if delta else []
+            contradicting = delta.contradicting if delta else []
+            evidence_log  = delta.evidence      if delta else []
+            is_derived    = any(result.label_id in e for e in derived_log)
+
+            results_out.append(FusionResult(
+                rank=0,
                 label_id=result.label_id,
                 label_name=result.label_name,
                 category=result.category,
+                description=getattr(result, 'description', ''),
                 hierarchy=result.hierarchy,
                 pai=result.pai,
-                s_ai=round(s_ai, 4),
-                s_symptom=round(s_symptom, 4),
-                s_risk=round(s_risk, 4),
-                s_rule=round(s_rule, 4),
-                score_final=score_final,
+                s_ai=s_ai,
+                s_symptom=s_symptom,
+                s_risk=s_risk,
+                s_rule=s_rule,
+                score_final=score,
                 confidence_label=confidence,
-                tier=result.tier,
-                tier_label=TIER_LABELS.get(result.tier, "unknown"),
+                tier=tier,
+                tier_label=TIER_LABELS.get(tier, "unknown"),
                 default_action=result.default_action,
                 allow_downgrade=result.allow_downgrade,
                 snomed_ct=result.snomed_ct,
@@ -341,67 +263,88 @@ class DecisionFusion:
                 aha_guideline=result.aha_guideline,
                 clinical_notes=result.clinical_notes,
                 is_suppressed=result.is_suppressed,
-            )
-            fusion_results.append(fr)
+                is_derived=is_derived,
+                supporting=supporting,
+                contradicting=contradicting,
+                evidence_log=evidence_log,
+            ))
 
-        # ── Sort: non-suppressed first, then by score desc ────────────
-        fusion_results.sort(key=lambda r: (r.is_suppressed, -r.score_final))
+        # ── Sort: non-suppressed first, Tier-1 first, then score desc ─
+        results_out.sort(key=lambda r: (
+            r.is_suppressed,
+            r.tier if not r.is_suppressed else 99,
+            -r.score_final,
+        ))
 
-        # ── Assign ranks (non-suppressed only) ────────────────────────
+        # ── Assign ranks ───────────────────────────────────────────────
         rank = 1
-        for fr in fusion_results:
-            if not fr.is_suppressed:
-                fr.rank = rank
+        for r in results_out:
+            if not r.is_suppressed:
+                r.rank = rank
                 rank += 1
 
-        # ── Derived subsets ───────────────────────────────────────────
-        active   = [r for r in fusion_results if not r.is_suppressed]
-        critical = [
-            r for r in active
-            if r.tier == 1 and r.confidence_label in ("CONFIRMED", "PROBABLE")
-        ]
-        top = active[0] if active else None
+        active   = [r for r in results_out if not r.is_suppressed]
+        critical = [r for r in active
+                    if r.tier == 1 and r.confidence_label in ("CONFIRMED", "PROBABLE")]
+        top      = active[0] if active else None
 
-        # ── Safety check: if ANY Tier-1 label is in results,
-        #    ensure it is never buried below INCIDENTAL regardless
-        #    of score (belt-and-suspenders on top of rule_executor) ───
-        for r in active:
-            if r.tier == 1 and r.confidence_label == "INCIDENTAL":
-                logger.warning(
-                    "Safety override: Tier-1 label '%s' had INCIDENTAL confidence "
-                    "(score=%.3f). Elevating to POSSIBLE for clinician review.",
-                    r.label_id, r.score_final,
-                )
-                r.confidence_label = "POSSIBLE"
+        logger.info(
+            "[Fusion] Complete — %d results (%d active, %d suppressed, %d critical)",
+            len(results_out), len(active),
+            len(results_out) - len(active), len(critical),
+        )
 
-        output = FusionOutput(
+        return FusionOutput(
             patient_id=patient_id,
-            results=fusion_results,
+            results=results_out,
             active_results=active,
             top_diagnosis=top,
             critical_alerts=critical,
             derived_log=derived_log,
             metadata={
-                "weight_ai":        W_AI,
-                "max_symptom":      MAX_SYMPTOM,
-                "max_risk":         MAX_RISK,
-                "total_candidates": len(fusion_results),
+                "w_ai":             W_AI,
+                "cap_symptom":      CAP_SYMPTOM,
+                "cap_risk":         CAP_RISK,
+                "cap_rule":         CAP_RULE,
+                "total_candidates": len(results_out),
                 "active_count":     len(active),
                 "critical_count":   len(critical),
             },
         )
 
-        logger.info(
-            "DecisionFusion complete — patient=%s  top=%s (%s, %.3f)  "
-            "critical_alerts=%d",
-            patient_id,
-            top.label_id if top else "none",
-            top.confidence_label if top else "—",
-            top.score_final if top else 0.0,
-            len(critical),
-        )
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
-        return output
+    def _split_delta(self, delta, patient: dict) -> tuple[float, float]:
+        """
+        Split HistoryDelta.score_delta into (s_symptom, s_risk).
+
+        Strategy: count triggers that came from symptoms vs risk_factors
+        and weight proportionally. Falls back to 70/30 split if unknown.
+        """
+        if delta is None or delta.score_delta == 0:
+            return 0.0, 0.0
+
+        symptoms     = patient.get("symptoms",     {})
+        risk_factors = patient.get("risk_factors", {})
+
+        sym_hits  = sum(
+            1 for t in delta.supporting
+            if t.replace(" ", "_") in symptoms
+        )
+        risk_hits = sum(
+            1 for t in delta.supporting
+            if t.replace(" ", "_") in risk_factors
+        )
+        total = sym_hits + risk_hits
+        sym_ratio = (sym_hits / total) if total > 0 else 0.70
+
+        raw_sym  = delta.score_delta * sym_ratio
+        raw_risk = delta.score_delta * (1 - sym_ratio)
+
+        s_symptom = round(max(-CAP_SYMPTOM, min(CAP_SYMPTOM, raw_sym)),  4)
+        s_risk    = round(max(-CAP_RISK,    min(CAP_RISK,    raw_risk)), 4)
+
+        return s_symptom, s_risk
 
     @staticmethod
     def _confidence_label(score: float) -> str:
@@ -411,9 +354,7 @@ class DecisionFusion:
         return "INCIDENTAL"
 
 
-# ---------------------------------------------------------------------------
-# Smoke test
-# ---------------------------------------------------------------------------
+# ── Smoke test ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import sys
@@ -421,40 +362,56 @@ if __name__ == "__main__":
                         format="%(levelname)s | %(message)s")
 
     from dataclasses import dataclass as dc
+    from history_module.history_encoder import HistoryDelta
 
     @dc
     class StubResult:
-        label_id: str; label_name: str; category: str
-        hierarchy: list; pai: float; score: float
-        tier: int; default_action: str; allow_downgrade: bool
-        snomed_ct: str = ""; icd10: str = ""; aha_guideline: str = ""
-        clinical_notes: str = ""; is_suppressed: bool = False
+        label_id: str; label_name: str; category: str; description: str
+        hierarchy: list; pai: float; score: float; tier: int
+        default_action: str; allow_downgrade: bool
+        snomed_ct: str = ""; icd10: str = ""
+        aha_guideline: str = ""; clinical_notes: str = ""
+        is_suppressed: bool = False
 
     stubs = [
-        StubResult("STEMI","ST-Elevation MI","Ischemia",
-                   ["ROOT","Ischemia","STEMI"],0.55,0.30,1,"Immediate PCI",False),
-        StubResult("AF","Atrial Fibrillation","Rhythm",
-                   ["ROOT","Rhythm","AF"],0.71,0.0,2,"Rate control",True),
-        StubResult("VF","Ventricular Fibrillation","Rhythm",
-                   ["ROOT","Rhythm","VF"],0.78,0.0,1,"Start ACLS",False),
-        StubResult("LVH","Left Ventricular Hypertrophy","Structural",
-                   ["ROOT","Structural","LVH"],0.42,0.0,3,"Outpatient eval",True),
+        StubResult("STEMI", "ST-Elevation MI", "Ischemia", "Acute MI",
+                   ["ROOT","Ischemia","STEMI"], 0.74, 0.40, 1,
+                   "Immediate PCI", False, "57054005", "I21",
+                   "2013_AHA_STEMI", "Time-critical"),
+        StubResult("AF", "Atrial Fibrillation", "Rhythm", "Irregular rhythm",
+                   ["ROOT","Rhythm","AF"], 0.42, 0.0, 2,
+                   "Rate control", True, "49436004", "I48"),
+        StubResult("LVH", "Left Ventricular Hypertrophy", "Structural", "LVH",
+                   ["ROOT","LVH"], 0.38, 0.0, 3,
+                   "Outpatient eval", True, "164873001", "I51.7"),
     ]
 
-    patient = {
-        "symptoms":     {"chest_pain": True, "palpitations": True},
-        "risk_factors": {"htn": True, "dm": False, "cad": True},
-        "vitals":       {"sbp": 88, "hr": 140, "spo2": 94},
+    deltas = {
+        "STEMI": HistoryDelta("STEMI", +0.40, 0,
+                              ["[H1] chest pain → +0.30", "[H7] cad → +0.10"],
+                              ["chest pain", "cad"], []),
+        "AF":    HistoryDelta("AF",    +0.09, 0,
+                              ["[H16] htn → +0.09"],
+                              ["htn"], []),
+        "LVH":   HistoryDelta("LVH",   +0.25, 0,
+                              ["[H19] htn → +0.18", "[H20] dyspnea → +0.07"],
+                              ["htn", "dyspnea"], []),
     }
 
-    fusion = DecisionFusion()
-    output = fusion.fuse(stubs, patient, derived_log=["R3: STEMI boosted +0.30"], patient_id="PT001")
+    patient = {
+        "symptoms":     {"chest_pain": True, "dyspnea": True},
+        "risk_factors": {"htn": True, "cad": True},
+        "vitals":       {"sbp": 88, "hr": 102},
+    }
 
-    print("\n=== Fusion output ===\n")
+    output = DecisionFusion().fuse(stubs, deltas, ["R3: STEMI boosted"], patient)
+
+    print("\n=== Ranked DDx ===\n")
     for r in output.active_results:
-        print(f"  Rank {r.rank}  {r.label_id:10s}  {r.confidence_label:12s}  "
-              f"score={r.score_final:.3f}  "
-              f"(ai={r.s_ai:.2f} sym={r.s_symptom:.2f} risk={r.s_risk:.2f} rule={r.s_rule:.2f})")
+        print(f"  Rank {r.rank}  {r.label_id:8s}  {r.confidence_label:12s}"
+              f"  score={r.score_final:.3f}"
+              f"  (ai={r.s_ai:.3f} sym={r.s_symptom:.3f}"
+              f" risk={r.s_risk:.3f} rule={r.s_rule:.3f})")
 
-    print(f"\n  Critical alerts: {[r.label_id for r in output.critical_alerts]}")
-    print(f"  Top diagnosis:   {output.top_diagnosis.label_id if output.top_diagnosis else 'none'}")
+    print(f"\n  Top: {output.top_diagnosis.label_id}")
+    print(f"  Critical alerts: {[r.label_id for r in output.critical_alerts]}")
