@@ -1,5 +1,0 @@
-variant,auc_roc_macro,f1_macro,top1_accuracy,top3_accuracy,tier1_recall,description
-A: AI model only,0.9986,0.9269,0.988,0.998,0.9834,"Raw CNN-Transformer output, no ontology or history"
-B: AI + Ontology,0.9986,0.9255,0.992,0.998,0.989,"Added ontology hierarchy, mutual exclusion, triage"
-C: AI + Ontology + History,0.9984,0.9231,0.99,0.998,0.989,"Added patient symptoms, risk factors, vitals"
-D: Full system (+ Rules),0.9983,0.932,0.986,0.998,0.9945,Full pipeline with cardiologist rule engine
