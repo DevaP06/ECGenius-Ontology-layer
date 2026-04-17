@@ -1,0 +1,180 @@
+{
+  "auc_roc_macro": 0.9983,
+  "auc_roc_weighted": 0.9983,
+  "f1_macro": 0.932,
+  "f1_weighted": 0.9318,
+  "precision_macro": 0.8809,
+  "recall_macro": 0.9918,
+  "top1_accuracy": 0.986,
+  "top3_accuracy": 0.998,
+  "tier1_recall": 0.9945,
+  "tier1_false_suppress": 1,
+  "mean_brier_score": 0.0378,
+  "per_label": [
+    {
+      "label_id": "AF",
+      "auc_roc": 0.9996,
+      "average_precision": 0.996,
+      "f1": 0.9885,
+      "precision": 0.9773,
+      "recall": 1.0,
+      "specificity": 0.9978,
+      "optimal_threshold": 0.6296,
+      "support": 43
+    },
+    {
+      "label_id": "NSR",
+      "auc_roc": 0.9969,
+      "average_precision": 0.9722,
+      "f1": 0.9231,
+      "precision": 0.8727,
+      "recall": 0.9796,
+      "specificity": 0.9845,
+      "optimal_threshold": 0.5425,
+      "support": 49
+    },
+    {
+      "label_id": "STEMI",
+      "auc_roc": 0.996,
+      "average_precision": 0.9827,
+      "f1": 0.94,
+      "precision": 0.9038,
+      "recall": 0.9792,
+      "specificity": 0.9889,
+      "optimal_threshold": 0.4809,
+      "support": 48
+    },
+    {
+      "label_id": "NSTEMI",
+      "auc_roc": 0.9996,
+      "average_precision": 0.9967,
+      "f1": 0.96,
+      "precision": 0.9231,
+      "recall": 1.0,
+      "specificity": 0.9912,
+      "optimal_threshold": 0.5326,
+      "support": 48
+    },
+    {
+      "label_id": "LVH",
+      "auc_roc": 0.9978,
+      "average_precision": 0.9821,
+      "f1": 0.9245,
+      "precision": 0.875,
+      "recall": 0.98,
+      "specificity": 0.9844,
+      "optimal_threshold": 0.4914,
+      "support": 50
+    },
+    {
+      "label_id": "VF",
+      "auc_roc": 0.9985,
+      "average_precision": 0.988,
+      "f1": 0.9189,
+      "precision": 0.85,
+      "recall": 1.0,
+      "specificity": 0.98,
+      "optimal_threshold": 0.4782,
+      "support": 51
+    },
+    {
+      "label_id": "VT",
+      "auc_roc": 0.9982,
+      "average_precision": 0.9847,
+      "f1": 0.9217,
+      "precision": 0.8548,
+      "recall": 1.0,
+      "specificity": 0.9799,
+      "optimal_threshold": 0.4533,
+      "support": 53
+    },
+    {
+      "label_id": "SVT",
+      "auc_roc": 0.9988,
+      "average_precision": 0.9919,
+      "f1": 0.9725,
+      "precision": 0.9636,
+      "recall": 0.9815,
+      "specificity": 0.9955,
+      "optimal_threshold": 0.5656,
+      "support": 54
+    },
+    {
+      "label_id": "LBBB",
+      "auc_roc": 0.9989,
+      "average_precision": 0.9898,
+      "f1": 0.9412,
+      "precision": 0.8889,
+      "recall": 1.0,
+      "specificity": 0.9867,
+      "optimal_threshold": 0.5362,
+      "support": 48
+    },
+    {
+      "label_id": "RBBB",
+      "auc_roc": 0.9983,
+      "average_precision": 0.984,
+      "f1": 0.9425,
+      "precision": 0.9111,
+      "recall": 0.9762,
+      "specificity": 0.9913,
+      "optimal_threshold": 0.5474,
+      "support": 42
+    },
+    {
+      "label_id": "Ischemia",
+      "auc_roc": 0.9987,
+      "average_precision": 0.9897,
+      "f1": 0.8571,
+      "precision": 0.75,
+      "recall": 1.0,
+      "specificity": 0.9646,
+      "optimal_threshold": 0.3934,
+      "support": 48
+    },
+    {
+      "label_id": "ST_Elevation",
+      "auc_roc": 0.9991,
+      "average_precision": 0.9913,
+      "f1": 0.9348,
+      "precision": 0.8776,
+      "recall": 1.0,
+      "specificity": 0.9869,
+      "optimal_threshold": 0.5065,
+      "support": 43
+    },
+    {
+      "label_id": "ST_Depression",
+      "auc_roc": 0.9962,
+      "average_precision": 0.9832,
+      "f1": 0.9174,
+      "precision": 0.8621,
+      "recall": 0.9804,
+      "specificity": 0.9822,
+      "optimal_threshold": 0.5153,
+      "support": 51
+    },
+    {
+      "label_id": "TWI",
+      "auc_roc": 0.9984,
+      "average_precision": 0.9868,
+      "f1": 0.8889,
+      "precision": 0.8,
+      "recall": 1.0,
+      "specificity": 0.9735,
+      "optimal_threshold": 0.436,
+      "support": 48
+    },
+    {
+      "label_id": "PVC",
+      "auc_roc": 0.9996,
+      "average_precision": 0.997,
+      "f1": 0.9492,
+      "precision": 0.9032,
+      "recall": 1.0,
+      "specificity": 0.9865,
+      "optimal_threshold": 0.4702,
+      "support": 56
+    }
+  ]
+}

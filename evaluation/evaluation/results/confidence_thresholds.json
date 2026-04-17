@@ -1,0 +1,192 @@
+{
+  "recommended_thresholds": {
+    "CONFIRMED": 0.4,
+    "PROBABLE": 0.4,
+    "POSSIBLE": 0.4,
+    "INCIDENTAL": 0.0
+  },
+  "original_thresholds": {
+    "CONFIRMED": 0.8,
+    "PROBABLE": 0.6,
+    "POSSIBLE": 0.3,
+    "INCIDENTAL": 0.0
+  },
+  "calibration_curve": [
+    {
+      "threshold": 0.4,
+      "precision": 0.99,
+      "coverage": 0.996,
+      "n_samples": 498
+    },
+    {
+      "threshold": 0.42,
+      "precision": 0.99,
+      "coverage": 0.996,
+      "n_samples": 498
+    },
+    {
+      "threshold": 0.44,
+      "precision": 0.9899,
+      "coverage": 0.992,
+      "n_samples": 496
+    },
+    {
+      "threshold": 0.46,
+      "precision": 0.9899,
+      "coverage": 0.99,
+      "n_samples": 495
+    },
+    {
+      "threshold": 0.48,
+      "precision": 0.9899,
+      "coverage": 0.986,
+      "n_samples": 493
+    },
+    {
+      "threshold": 0.5,
+      "precision": 0.9898,
+      "coverage": 0.982,
+      "n_samples": 491
+    },
+    {
+      "threshold": 0.52,
+      "precision": 0.9898,
+      "coverage": 0.98,
+      "n_samples": 490
+    },
+    {
+      "threshold": 0.54,
+      "precision": 0.9897,
+      "coverage": 0.972,
+      "n_samples": 486
+    },
+    {
+      "threshold": 0.56,
+      "precision": 0.9917,
+      "coverage": 0.96,
+      "n_samples": 480
+    },
+    {
+      "threshold": 0.58,
+      "precision": 0.9916,
+      "coverage": 0.958,
+      "n_samples": 479
+    },
+    {
+      "threshold": 0.6,
+      "precision": 0.9936,
+      "coverage": 0.94,
+      "n_samples": 470
+    },
+    {
+      "threshold": 0.62,
+      "precision": 0.9935,
+      "coverage": 0.93,
+      "n_samples": 465
+    },
+    {
+      "threshold": 0.64,
+      "precision": 0.9934,
+      "coverage": 0.908,
+      "n_samples": 454
+    },
+    {
+      "threshold": 0.66,
+      "precision": 0.9955,
+      "coverage": 0.894,
+      "n_samples": 447
+    },
+    {
+      "threshold": 0.68,
+      "precision": 0.9977,
+      "coverage": 0.864,
+      "n_samples": 432
+    },
+    {
+      "threshold": 0.7,
+      "precision": 0.9976,
+      "coverage": 0.844,
+      "n_samples": 422
+    },
+    {
+      "threshold": 0.72,
+      "precision": 0.9975,
+      "coverage": 0.816,
+      "n_samples": 408
+    },
+    {
+      "threshold": 0.74,
+      "precision": 1.0,
+      "coverage": 0.782,
+      "n_samples": 391
+    },
+    {
+      "threshold": 0.76,
+      "precision": 1.0,
+      "coverage": 0.748,
+      "n_samples": 374
+    },
+    {
+      "threshold": 0.78,
+      "precision": 1.0,
+      "coverage": 0.716,
+      "n_samples": 358
+    },
+    {
+      "threshold": 0.8,
+      "precision": 1.0,
+      "coverage": 0.674,
+      "n_samples": 337
+    },
+    {
+      "threshold": 0.82,
+      "precision": 1.0,
+      "coverage": 0.616,
+      "n_samples": 308
+    },
+    {
+      "threshold": 0.84,
+      "precision": 1.0,
+      "coverage": 0.54,
+      "n_samples": 270
+    },
+    {
+      "threshold": 0.86,
+      "precision": 1.0,
+      "coverage": 0.48,
+      "n_samples": 240
+    },
+    {
+      "threshold": 0.88,
+      "precision": 1.0,
+      "coverage": 0.408,
+      "n_samples": 204
+    },
+    {
+      "threshold": 0.9,
+      "precision": 1.0,
+      "coverage": 0.324,
+      "n_samples": 162
+    },
+    {
+      "threshold": 0.92,
+      "precision": 1.0,
+      "coverage": 0.246,
+      "n_samples": 123
+    },
+    {
+      "threshold": 0.94,
+      "precision": 1.0,
+      "coverage": 0.176,
+      "n_samples": 88
+    }
+  ],
+  "tier1_safety": {
+    "safe": true,
+    "tier1_recall_at_t": 0.9945,
+    "target_recall": 0.99,
+    "confirmed_threshold": 0.4,
+    "note": "SAFE \u2014 Tier-1 recall meets target"
+  },
+  "note": "These thresholds are tuned on validation set. Always verify on held-out test set before clinical use."
+}

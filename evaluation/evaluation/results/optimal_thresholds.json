@@ -1,0 +1,36 @@
+{
+  "youden": {
+    "AF": 0.63,
+    "NSR": 0.542,
+    "STEMI": 0.481,
+    "NSTEMI": 0.533,
+    "LVH": 0.491,
+    "VF": 0.478,
+    "VT": 0.453,
+    "SVT": 0.566,
+    "LBBB": 0.536,
+    "RBBB": 0.547,
+    "Ischemia": 0.393,
+    "ST_Elevation": 0.507,
+    "ST_Depression": 0.515,
+    "TWI": 0.436,
+    "PVC": 0.47
+  },
+  "f1": {
+    "AF": 0.619,
+    "NSR": 0.528,
+    "STEMI": 0.638,
+    "NSTEMI": 0.601,
+    "LVH": 0.564,
+    "VF": 0.638,
+    "VT": 0.491,
+    "SVT": 0.583,
+    "LBBB": 0.583,
+    "RBBB": 0.601,
+    "Ischemia": 0.528,
+    "ST_Elevation": 0.583,
+    "ST_Depression": 0.619,
+    "TWI": 0.601,
+    "PVC": 0.528
+  }
+}
