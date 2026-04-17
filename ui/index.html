@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ECGenius — Clinical Decision Support</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --navy:       #0a1628;
+  --navy-mid:   #0f2244;
+  --navy-light: #1a3560;
+  --navy-card:  #112040;
+  --accent:     #3b82f6;
+  --accent-bright: #60a5fa;
+  --accent-glow:   #3b82f620;
+  --teal:       #14b8a6;
+  --red:        #ef4444;
+  --amber:      #f59e0b;
+  --green:      #22c55e;
+  --white:      #f0f6ff;
+  --white-dim:  #a8bdd6;
+  --white-mute: #4a6080;
+  --border:     #1e3a5f;
+  --border-bright: #2a5090;
+  --mono: 'DM Mono', monospace;
+  --serif: 'Instrument Serif', serif;
+  --sans: 'DM Sans', sans-serif;
+}
+
+body{
+  background: var(--navy);
+  color: var(--white);
+  font-family: var(--sans);
+  min-height: 100vh;
+  font-size: 14px;
+}
+
+/* ── Layout ── */
+.app{display:flex;flex-direction:column;min-height:100vh;}
+
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 32px;height:60px;
+  background:var(--navy-mid);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+}
+
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{
+  width:32px;height:32px;border-radius:8px;
+  background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:700;color:white;font-family:var(--mono);
+}
+.logo-text{font-family:var(--serif);font-size:20px;color:var(--white);letter-spacing:.02em;}
+.logo-sub{font-size:11px;color:var(--white-dim);font-family:var(--mono);letter-spacing:.1em;}
+
+.header-right{display:flex;align-items:center;gap:16px;}
+.mode-badge{
+  font-size:10px;font-family:var(--mono);letter-spacing:.1em;
+  padding:3px 10px;border-radius:20px;
+  background:var(--accent-glow);border:1px solid var(--accent);
+  color:var(--accent-bright);
+}
+
+main{display:flex;flex:1;height:calc(100vh - 60px);}
+
+/* ── Sidebar ── */
+.sidebar{
+  width:340px;flex-shrink:0;
+  background:var(--navy-mid);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+
+.sidebar-section{
+  padding:20px 24px;
+  border-bottom:1px solid var(--border);
+}
+.sidebar-section:last-child{border-bottom:none;}
+
+.section-label{
+  font-size:10px;letter-spacing:.12em;
+  color:var(--white-mute);font-family:var(--mono);
+  margin-bottom:14px;text-transform:uppercase;
+}
+
+/* ── Content ── */
+.content{flex:1;overflow-y:auto;padding:28px 32px;}
+
+/* ── Form elements ── */
+.field{margin-bottom:14px;}
+.field label{
+  display:block;font-size:11px;color:var(--white-dim);
+  margin-bottom:5px;font-family:var(--mono);letter-spacing:.06em;
+}
+
+input[type=text],input[type=number]{
+  width:100%;padding:8px 12px;
+  background:var(--navy);border:1px solid var(--border);
+  border-radius:6px;color:var(--white);font-family:var(--mono);font-size:12px;
+  outline:none;transition:border-color .2s;
+}
+input:focus{border-color:var(--accent);}
+
+.toggle-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 0;border-bottom:1px solid var(--border)28;
+}
+.toggle-label{font-size:12px;color:var(--white-dim);}
+.toggle{
+  position:relative;width:36px;height:20px;
+  background:var(--navy);border:1px solid var(--border);
+  border-radius:10px;cursor:pointer;transition:background .2s,border-color .2s;
+  flex-shrink:0;
+}
+.toggle.on{background:var(--accent);border-color:var(--accent);}
+.toggle::after{
+  content:'';position:absolute;top:2px;left:2px;
+  width:14px;height:14px;border-radius:50%;background:var(--white-mute);
+  transition:transform .2s,background .2s;
+}
+.toggle.on::after{transform:translateX(16px);background:white;}
+
+.vital-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* ── Buttons ── */
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:10px 20px;border-radius:8px;border:none;
+  font-family:var(--sans);font-size:13px;font-weight:500;
+  cursor:pointer;transition:all .2s;
+}
+.btn-primary{
+  background:var(--accent);color:white;width:100%;
+}
+.btn-primary:hover{background:#2563eb;transform:translateY(-1px);}
+.btn-primary:active{transform:translateY(0);}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.btn-ghost{
+  background:transparent;color:var(--white-dim);
+  border:1px solid var(--border);font-size:11px;padding:6px 14px;
+}
+.btn-ghost:hover{border-color:var(--border-bright);color:var(--white);}
+
+/* ── Cards ── */
+.card{
+  background:var(--navy-card);border:1px solid var(--border);
+  border-radius:12px;padding:20px 24px;margin-bottom:16px;
+}
+.card-title{
+  font-size:11px;letter-spacing:.1em;color:var(--white-mute);
+  font-family:var(--mono);margin-bottom:16px;text-transform:uppercase;
+}
+
+/* ── Confidence badge ── */
+.conf-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:10px;font-family:var(--mono);letter-spacing:.08em;
+  padding:3px 10px;border-radius:20px;font-weight:500;
+}
+.conf-CONFIRMED  {background:#22c55e18;border:1px solid #22c55e60;color:#4ade80;}
+.conf-PROBABLE   {background:#3b82f618;border:1px solid #3b82f660;color:#60a5fa;}
+.conf-POSSIBLE   {background:#f59e0b18;border:1px solid #f59e0b60;color:#fbbf24;}
+.conf-INCIDENTAL {background:#6b728018;border:1px solid #6b728060;color:#9ca3af;}
+
+/* ── Tier badge ── */
+.tier-badge{
+  font-size:9px;font-family:var(--mono);letter-spacing:.1em;
+  padding:2px 8px;border-radius:4px;font-weight:600;
+}
+.tier-1{background:#ef444420;border:1px solid #ef4444;color:#f87171;}
+.tier-2{background:#f59e0b20;border:1px solid #f59e0b;color:#fbbf24;}
+.tier-3{background:#22c55e20;border:1px solid #22c55e;color:#4ade80;}
+
+/* ── DDx result card ── */
+.ddx-card{
+  background:var(--navy-card);border:1px solid var(--border);
+  border-radius:10px;padding:18px 20px;margin-bottom:10px;
+  transition:border-color .2s;cursor:pointer;
+}
+.ddx-card:hover{border-color:var(--border-bright);}
+.ddx-card.active{border-color:var(--accent);background:#0f2244;}
+.ddx-card.suppressed{opacity:.5;}
+
+.ddx-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.ddx-rank{
+  width:24px;height:24px;border-radius:50%;
+  background:var(--navy-light);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-family:var(--mono);color:var(--accent-bright);
+  flex-shrink:0;
+}
+.ddx-name{font-size:14px;font-weight:500;color:var(--white);flex:1;}
+.ddx-id{font-size:10px;font-family:var(--mono);color:var(--white-mute);}
+
+.score-bar-wrap{margin:10px 0;}
+.score-bar-label{
+  display:flex;justify-content:space-between;
+  font-size:10px;color:var(--white-mute);margin-bottom:4px;
+  font-family:var(--mono);
+}
+.score-bar-track{height:4px;background:var(--navy);border-radius:2px;overflow:hidden;}
+.score-bar-fill{height:100%;border-radius:2px;transition:width .6s ease;}
+
+.breakdown-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;
+}
+.breakdown-item{
+  background:var(--navy);border-radius:6px;padding:8px 10px;
+}
+.breakdown-key{font-size:9px;color:var(--white-mute);font-family:var(--mono);letter-spacing:.08em;}
+.breakdown-val{font-size:14px;font-weight:500;font-family:var(--mono);color:var(--accent-bright);}
+
+.evidence-list{margin-top:10px;}
+.evidence-item{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--white-dim);padding:3px 0;
+}
+.ev-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.ev-dot.supporting{background:var(--green);}
+.ev-dot.contradicting{background:var(--red);}
+
+/* ── Critical alert banner ── */
+.critical-banner{
+  background:#ef444410;border:1px solid #ef444460;
+  border-radius:10px;padding:14px 18px;margin-bottom:16px;
+  display:flex;align-items:center;gap:12px;
+}
+.critical-icon{font-size:20px;flex-shrink:0;}
+.critical-text{flex:1;}
+.critical-label{font-size:11px;color:#f87171;font-family:var(--mono);letter-spacing:.08em;margin-bottom:2px;}
+.critical-action{font-size:13px;font-weight:500;color:var(--white);}
+
+/* ── Detail panel ── */
+.detail-panel{
+  background:var(--navy-card);border:1px solid var(--border);
+  border-radius:12px;padding:24px;
+}
+.detail-header{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:20px;
+}
+.detail-name{font-family:var(--serif);font-size:22px;color:var(--white);margin-bottom:4px;}
+.detail-desc{font-size:12px;color:var(--white-dim);}
+.detail-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+
+.detail-section{margin-bottom:20px;}
+.detail-section-title{
+  font-size:10px;letter-spacing:.1em;color:var(--white-mute);
+  font-family:var(--mono);margin-bottom:10px;text-transform:uppercase;
+  padding-bottom:6px;border-bottom:1px solid var(--border);
+}
+
+.terminology-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.term-item{background:var(--navy);border-radius:6px;padding:10px 12px;}
+.term-key{font-size:9px;color:var(--white-mute);font-family:var(--mono);letter-spacing:.08em;margin-bottom:3px;}
+.term-val{font-size:12px;font-family:var(--mono);color:var(--accent-bright);}
+
+.hierarchy-path{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:11px;
+}
+.hier-node{color:var(--white-dim);}
+.hier-node.leaf{color:var(--accent-bright);font-weight:500;}
+.hier-sep{color:var(--white-mute);}
+
+/* ── Clinical report ── */
+.report-box{
+  background:var(--navy);border:1px solid var(--border);
+  border-radius:8px;padding:20px;font-family:var(--mono);
+  font-size:11px;line-height:1.8;color:var(--white-dim);
+  white-space:pre-wrap;max-height:500px;overflow-y:auto;
+}
+
+/* ── Empty / loading states ── */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:60px 20px;color:var(--white-mute);text-align:center;gap:12px;
+}
+.empty-icon{font-size:40px;opacity:.3;}
+.empty-text{font-size:13px;color:var(--white-mute);}
+
+.spinner{
+  width:20px;height:20px;border:2px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.pulse{animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border);}
+.tab{
+  padding:8px 16px;font-size:12px;cursor:pointer;
+  color:var(--white-mute);border-bottom:2px solid transparent;
+  transition:all .2s;margin-bottom:-1px;font-family:var(--mono);
+}
+.tab.active{color:var(--accent-bright);border-bottom-color:var(--accent);}
+.tab:hover{color:var(--white-dim);}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ── Animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .35s ease forwards;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+const API = "http://localhost:8000";
+
+// ── Default patient ───────────────────────────────────────────────────────────
+const DEFAULT_PATIENT = {
+  symptoms: {
+    chest_pain: false, palpitations: false, syncope: false,
+    dizziness: false, dyspnea: false, diaphoresis: false,
+    fatigue: false, nausea: false,
+  },
+  risk_factors: {
+    htn: false, dm: false, cad: false,
+    young_age: false, smoking: false, prior_mi: false,
+    family_hx: false, hyperlipidemia: false,
+  },
+  vitals: { sbp: 120, hr: 72, spo2: 98 },
+};
+
+const SYMPTOM_LABELS = {
+  chest_pain:"Chest Pain", palpitations:"Palpitations",
+  syncope:"Syncope", dizziness:"Dizziness",
+  dyspnea:"Dyspnea", diaphoresis:"Diaphoresis",
+  fatigue:"Fatigue", nausea:"Nausea",
+};
+
+const RISK_LABELS = {
+  htn:"Hypertension", dm:"Diabetes", cad:"Known CAD",
+  young_age:"Age < 40", smoking:"Smoking", prior_mi:"Prior MI",
+  family_hx:"Family History", hyperlipidemia:"Hyperlipidemia",
+};
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function Toggle({ value, onChange }) {
+  return (
+    <div className={`toggle ${value ? 'on' : ''}`} onClick={() => onChange(!value)} />
+  );
+}
+
+function ConfBadge({ label }) {
+  return <span className={`conf-badge conf-${label}`}>{label}</span>;
+}
+
+function TierBadge({ tier }) {
+  const labels = { 1: 'TIER 1 · CRITICAL', 2: 'TIER 2 · URGENT', 3: 'TIER 3 · ROUTINE' };
+  return <span className={`tier-badge tier-${tier}`}>{labels[tier]}</span>;
+}
+
+function ScoreBar({ score, color }) {
+  const colors = {
+    CONFIRMED: '#22c55e', PROBABLE: '#3b82f6',
+    POSSIBLE: '#f59e0b', INCIDENTAL: '#6b7280',
+  };
+  return (
+    <div className="score-bar-wrap">
+      <div className="score-bar-label">
+        <span>Score</span><span>{score.toFixed(3)}</span>
+      </div>
+      <div className="score-bar-track">
+        <div className="score-bar-fill"
+          style={{ width: `${score * 100}%`, background: colors[color] || '#3b82f6' }} />
+      </div>
+    </div>
+  );
+}
+
+function CriticalBanner({ alerts }) {
+  if (!alerts || alerts.length === 0) return null;
+  return (
+    <div>
+      {alerts.map(a => (
+        <div key={a.label_id} className="critical-banner fade-up">
+          <div className="critical-icon">⚠</div>
+          <div className="critical-text">
+            <div className="critical-label">CRITICAL ALERT · TIER 1</div>
+            <div className="critical-action">
+              {a.label_name} — {a.default_action}
+            </div>
+          </div>
+          <ConfBadge label={a.confidence_label} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DDxCard({ result, isActive, onClick }) {
+  const suppressed = result.is_suppressed;
+  return (
+    <div
+      className={`ddx-card fade-up ${isActive ? 'active' : ''} ${suppressed ? 'suppressed' : ''}`}
+      onClick={onClick}
+    >
+      <div className="ddx-header">
+        {!suppressed && <div className="ddx-rank">{result.rank}</div>}
+        <div style={{ flex: 1 }}>
+          <div className="ddx-name">{result.label_name}</div>
+          <div className="ddx-id">{result.label_id}</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <ConfBadge label={result.confidence_label} />
+          <TierBadge tier={result.tier} />
+        </div>
+      </div>
+
+      <ScoreBar score={result.score} color={result.confidence_label} />
+
+      <div className="breakdown-grid">
+        {[
+          ['AI Model', result.score_breakdown?.s_ai],
+          ['Symptoms', result.score_breakdown?.s_symptom],
+          ['Risk', result.score_breakdown?.s_risk],
+          ['Rules', result.score_breakdown?.s_rule],
+        ].map(([k, v]) => (
+          <div key={k} className="breakdown-item">
+            <div className="breakdown-key">{k}</div>
+            <div className="breakdown-val">{(v || 0).toFixed(3)}</div>
+          </div>
+        ))}
+      </div>
+
+      {result.supporting?.length > 0 && (
+        <div className="evidence-list">
+          {result.supporting.slice(0, 3).map(s => (
+            <div key={s} className="evidence-item">
+              <div className="ev-dot supporting" />
+              <span>{s}</span>
+            </div>
+          ))}
+          {result.contradicting?.slice(0, 2).map(s => (
+            <div key={s} className="evidence-item">
+              <div className="ev-dot contradicting" />
+              <span>{s}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailPanel({ result }) {
+  if (!result) return (
+    <div className="empty-state">
+      <div className="empty-icon">◎</div>
+      <div className="empty-text">Select a diagnosis to view details</div>
+    </div>
+  );
+
+  return (
+    <div className="detail-panel fade-up">
+      <div className="detail-header">
+        <div>
+          <div className="detail-name">{result.label_name}</div>
+          <div className="detail-desc">{result.category}</div>
+          <div className="detail-badges">
+            <ConfBadge label={result.confidence_label} />
+            <TierBadge tier={result.tier} />
+            {result.is_suppressed && (
+              <span className="conf-badge" style={{background:'#6b728018',border:'1px solid #6b7280',color:'#9ca3af'}}>
+                SUPPRESSED
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 28, color: 'var(--accent-bright)', fontWeight: 500 }}>
+            {result.score.toFixed(3)}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--white-mute)', fontFamily: 'var(--mono)' }}>FINAL SCORE</div>
+        </div>
+      </div>
+
+      <div className="detail-section">
+        <div className="detail-section-title">Ontology Hierarchy</div>
+        <div className="hierarchy-path">
+          {result.hierarchy?.map((node, i) => (
+            <React.Fragment key={node}>
+              <span className={`hier-node ${i === result.hierarchy.length - 1 ? 'leaf' : ''}`}>{node}</span>
+              {i < result.hierarchy.length - 1 && <span className="hier-sep">›</span>}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      <div className="detail-section">
+        <div className="detail-section-title">Score Breakdown</div>
+        <div className="breakdown-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+          {[
+            ['AI (0.5×Pai)', result.score_breakdown?.s_ai],
+            ['Symptoms', result.score_breakdown?.s_symptom],
+            ['Risk Factors', result.score_breakdown?.s_risk],
+            ['Rules / History', result.score_breakdown?.s_rule],
+          ].map(([k, v]) => (
+            <div key={k} className="breakdown-item">
+              <div className="breakdown-key">{k}</div>
+              <div className="breakdown-val">{(v || 0).toFixed(3)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="detail-section">
+        <div className="detail-section-title">Clinical Action</div>
+        <div style={{ background: 'var(--navy)', borderRadius: 8, padding: '12px 14px' }}>
+          <div style={{ fontSize: 13, color: 'var(--white)', fontWeight: 500 }}>{result.default_action}</div>
+          {result.aha_guideline && (
+            <div style={{ fontSize: 10, color: 'var(--white-mute)', fontFamily: 'var(--mono)', marginTop: 4 }}>
+              {result.aha_guideline}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="detail-section">
+        <div className="detail-section-title">Terminology</div>
+        <div className="terminology-grid">
+          <div className="term-item"><div className="term-key">SNOMED-CT</div><div className="term-val">{result.snomed_ct || '—'}</div></div>
+          <div className="term-item"><div className="term-key">ICD-10</div><div className="term-val">{result.icd10 || '—'}</div></div>
+        </div>
+      </div>
+
+      {result.evidence_log?.length > 0 && (
+        <div className="detail-section">
+          <div className="detail-section-title">Evidence Log</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--white-dim)', lineHeight: 1.9 }}>
+            {result.evidence_log.map((e, i) => <div key={i}>{e}</div>)}
+          </div>
+        </div>
+      )}
+
+      {result.clinical_notes && (
+        <div style={{ background:'#f59e0b10', border:'1px solid #f59e0b40', borderRadius:8, padding:'10px 14px' }}>
+          <div style={{ fontSize:10, color:'#fbbf24', fontFamily:'var(--mono)', marginBottom:3 }}>CLINICAL NOTE</div>
+          <div style={{ fontSize:12, color:'var(--white-dim)' }}>{result.clinical_notes}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClinicalReport({ data }) {
+  if (!data) return null;
+  const top    = data.top_diagnosis;
+  const active = data.differential || [];
+  const crit   = data.critical_alerts || [];
+  const supp   = data.suppressed || [];
+
+  const lines = [
+    `${'='.repeat(56)}`,
+    `ECGenius Clinical Decision Support Report`,
+    `Patient ID:  ${data.patient_id}`,
+    `Total labels evaluated: ${data.total_considered}`,
+    `${'='.repeat(56)}`,
+    '',
+  ];
+
+  if (crit.length > 0) {
+    lines.push('!!! CRITICAL ALERTS !!!');
+    crit.forEach(r => {
+      lines.push(`  [${r.confidence_label}] ${r.label_name}`);
+      lines.push(`  Action: ${r.default_action}`);
+    });
+    lines.push('');
+  }
+
+  lines.push('Differential Diagnosis (ranked):');
+  lines.push('-'.repeat(40));
+  active.forEach((r, i) => {
+    lines.push(`  ${i+1}. ${r.label_name.padEnd(32)} [${r.confidence_label}]  score=${r.score.toFixed(3)}  Tier ${r.tier}`);
+    lines.push(`     Action: ${r.default_action}`);
+    if (r.supporting?.length > 0) lines.push(`     Supporting: ${r.supporting.join(', ')}`);
+    if (r.snomed_ct) lines.push(`     SNOMED-CT: ${r.snomed_ct}  ICD-10: ${r.icd10}`);
+    lines.push('');
+  });
+
+  if (supp.length > 0) {
+    lines.push('Suppressed (shown for transparency):');
+    supp.forEach(r => lines.push(`  - ${r.label_name} (${r.label_id}): suppressed by ontology rule`));
+    lines.push('');
+  }
+
+  if (data.derived_log?.length > 0) {
+    lines.push('Rule engine log:');
+    data.derived_log.forEach(e => lines.push(`  ${e}`));
+    lines.push('');
+  }
+
+  lines.push('='.repeat(56));
+  lines.push('AI-assisted. Review by qualified clinician required.');
+  lines.push('='.repeat(56));
+
+  return <div className="report-box">{lines.join('\n')}</div>;
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+
+function App() {
+  const [patient, setPatient]         = useState(DEFAULT_PATIENT);
+  const [result, setResult]           = useState(null);
+  const [selected, setSelected]       = useState(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState(null);
+  const [activeTab, setActiveTab]     = useState('differential');
+  const [patientId, setPatientId]     = useState('PT_001');
+  const [showSuppressed, setShow]     = useState(false);
+  const [apiMode, setApiMode]         = useState('mock');  // 'mock' | 'real'
+  const [modelOutput, setModelOutput] = useState('{\n  "STEMI": 0.74,\n  "AF": 0.42,\n  "NSR": 0.61,\n  "ST_Elevation": 0.80,\n  "LVH": 0.38,\n  "VF": 0.19\n}');
+
+  const setSymptom  = (k, v) => setPatient(p => ({ ...p, symptoms:     { ...p.symptoms,     [k]: v } }));
+  const setRisk     = (k, v) => setPatient(p => ({ ...p, risk_factors: { ...p.risk_factors, [k]: v } }));
+  const setVital    = (k, v) => setPatient(p => ({ ...p, vitals:       { ...p.vitals,       [k]: parseFloat(v) || 0 } }));
+
+  const run = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setSelected(null);
+
+    try {
+      let body, url;
+      if (apiMode === 'mock') {
+        url  = `${API}/diagnose/mock`;
+        body = { patient, patient_id: patientId };
+      } else {
+        url  = `${API}/diagnose`;
+        body = { model_output: JSON.parse(modelOutput), patient, patient_id: patientId };
+      }
+
+      const res  = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'API error');
+      }
+
+      const data = await res.json();
+      setResult(data);
+      if (data.differential?.length > 0) setSelected(data.differential[0]);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [patient, patientId, apiMode, modelOutput]);
+
+  return (
+    <div className="app">
+      <header>
+        <div className="logo">
+          <div className="logo-icon">Ec</div>
+          <div>
+            <div className="logo-text">ECGenius</div>
+            <div className="logo-sub">Ontology-Guided Differential Diagnosis</div>
+          </div>
+        </div>
+        <div className="header-right">
+          <span className="mode-badge">{apiMode === 'mock' ? 'MOCK MODE' : 'LIVE MODEL'}</span>
+          <button className="btn btn-ghost" onClick={() => setApiMode(m => m === 'mock' ? 'real' : 'mock')}>
+            {apiMode === 'mock' ? 'Switch to Live' : 'Switch to Mock'}
+          </button>
+        </div>
+      </header>
+
+      <main>
+        {/* ── Sidebar ── */}
+        <div className="sidebar">
+
+          {/* Patient ID */}
+          <div className="sidebar-section">
+            <div className="section-label">Patient</div>
+            <div className="field">
+              <label>Patient ID</label>
+              <input type="text" value={patientId}
+                onChange={e => setPatientId(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Symptoms */}
+          <div className="sidebar-section">
+            <div className="section-label">Symptoms</div>
+            {Object.entries(SYMPTOM_LABELS).map(([k, label]) => (
+              <div key={k} className="toggle-row">
+                <span className="toggle-label">{label}</span>
+                <Toggle value={patient.symptoms[k]} onChange={v => setSymptom(k, v)} />
+              </div>
+            ))}
+          </div>
+
+          {/* Risk factors */}
+          <div className="sidebar-section">
+            <div className="section-label">Risk Factors</div>
+            {Object.entries(RISK_LABELS).map(([k, label]) => (
+              <div key={k} className="toggle-row">
+                <span className="toggle-label">{label}</span>
+                <Toggle value={patient.risk_factors[k]} onChange={v => setRisk(k, v)} />
+              </div>
+            ))}
+          </div>
+
+          {/* Vitals */}
+          <div className="sidebar-section">
+            <div className="section-label">Vitals</div>
+            <div className="vital-grid">
+              <div className="field">
+                <label>SBP (mmHg)</label>
+                <input type="number" value={patient.vitals.sbp}
+                  onChange={e => setVital('sbp', e.target.value)} />
+              </div>
+              <div className="field">
+                <label>HR (bpm)</label>
+                <input type="number" value={patient.vitals.hr}
+                  onChange={e => setVital('hr', e.target.value)} />
+              </div>
+              <div className="field" style={{ gridColumn: 'span 2' }}>
+                <label>SpO₂ (%)</label>
+                <input type="number" value={patient.vitals.spo2}
+                  onChange={e => setVital('spo2', e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Model output (live mode) */}
+          {apiMode === 'real' && (
+            <div className="sidebar-section">
+              <div className="section-label">Model Output JSON</div>
+              <textarea
+                value={modelOutput}
+                onChange={e => setModelOutput(e.target.value)}
+                style={{
+                  width:'100%',height:140,background:'var(--navy)',
+                  border:'1px solid var(--border)',borderRadius:6,
+                  color:'var(--accent-bright)',fontFamily:'var(--mono)',
+                  fontSize:11,padding:10,outline:'none',resize:'vertical',
+                }}
+              />
+            </div>
+          )}
+
+          {/* Run button */}
+          <div className="sidebar-section">
+            <button className="btn btn-primary" onClick={run} disabled={loading}>
+              {loading ? <><div className="spinner" />Running pipeline...</> : '▶ Run Diagnosis'}
+            </button>
+            {error && (
+              <div style={{ marginTop:10, padding:'8px 10px', background:'#ef444410',
+                border:'1px solid #ef444440', borderRadius:6,
+                fontSize:11, color:'#f87171', fontFamily:'var(--mono)' }}>
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Main content ── */}
+        <div className="content">
+          {!result && !loading && (
+            <div className="empty-state" style={{ height: '100%' }}>
+              <div className="empty-icon">♥</div>
+              <div style={{ fontFamily:'var(--serif)', fontSize:22, color:'var(--white-dim)' }}>
+                Ready for Analysis
+              </div>
+              <div className="empty-text">
+                Fill in patient history and click Run Diagnosis
+              </div>
+            </div>
+          )}
+
+          {loading && (
+            <div className="empty-state" style={{ height: '100%' }}>
+              <div className="spinner pulse" style={{ width:32, height:32, borderWidth:3 }} />
+              <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'var(--white-mute)' }}>
+                Running pipeline...
+              </div>
+              <div style={{ fontSize:11, color:'var(--white-mute)' }}>
+                Ontology → Rules → History → Fusion
+              </div>
+            </div>
+          )}
+
+          {result && (
+            <>
+              {/* Critical alerts */}
+              <CriticalBanner alerts={result.critical_alerts} />
+
+              {/* Tabs */}
+              <div className="tabs">
+                {[
+                  ['differential', `Differential (${result.differential?.length || 0})`],
+                  ['detail',       'Detail View'],
+                  ['report',       'Clinical Report'],
+                ].map(([id, label]) => (
+                  <div key={id} className={`tab ${activeTab === id ? 'active' : ''}`}
+                    onClick={() => setActiveTab(id)}>
+                    {label}
+                  </div>
+                ))}
+              </div>
+
+              {/* Differential tab */}
+              {activeTab === 'differential' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    {result.differential?.map(r => (
+                      <DDxCard key={r.label_id} result={r}
+                        isActive={selected?.label_id === r.label_id}
+                        onClick={() => { setSelected(r); setActiveTab('detail'); }} />
+                    ))}
+
+                    {result.suppressed?.length > 0 && (
+                      <>
+                        <div style={{ display:'flex', alignItems:'center', gap:10, margin:'16px 0 10px',
+                          cursor:'pointer', color:'var(--white-mute)', fontSize:11, fontFamily:'var(--mono)' }}
+                          onClick={() => setShow(s => !s)}>
+                          <span>{showSuppressed ? '▼' : '▶'}</span>
+                          <span>SUPPRESSED ({result.suppressed.length})</span>
+                        </div>
+                        {showSuppressed && result.suppressed.map(r => (
+                          <DDxCard key={r.label_id} result={r}
+                            isActive={selected?.label_id === r.label_id}
+                            onClick={() => { setSelected(r); setActiveTab('detail'); }} />
+                        ))}
+                      </>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="card">
+                      <div className="card-title">Pipeline Metadata</div>
+                      {Object.entries(result.metadata || {}).map(([k, v]) => (
+                        <div key={k} className="toggle-row">
+                          <span style={{ fontSize:11, color:'var(--white-mute)', fontFamily:'var(--mono)' }}>{k}</span>
+                          <span style={{ fontSize:11, color:'var(--accent-bright)', fontFamily:'var(--mono)' }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {result.derived_log?.length > 0 && (
+                      <div className="card">
+                        <div className="card-title">Rule Engine Log</div>
+                        {result.derived_log.map((e, i) => (
+                          <div key={i} style={{ fontSize:10, fontFamily:'var(--mono)',
+                            color:'var(--white-dim)', padding:'3px 0',
+                            borderBottom:'1px solid var(--border)28' }}>
+                            {e}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Detail tab */}
+              {activeTab === 'detail' && <DetailPanel result={selected} />}
+
+              {/* Report tab */}
+              {activeTab === 'report' && <ClinicalReport data={result} />}
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
