@@ -9,11 +9,22 @@ Run:
 """
 
 from __future__ import annotations
+import os
+
+# Cap BLAS thread pools before numpy/pandas/torch load — on Windows, OpenBLAS
+# sizing its pool to the CPU core count can throw "Memory allocation still
+# failed after 10 retries", especially under `uvicorn --reload`'s child process.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+
 import json
 import sys
 import logging
 from pathlib import Path
 from typing import Optional
+
+import pandas as pd
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,9 +38,13 @@ logger = logging.getLogger("ECGenius.API")
 
 app = FastAPI(title="ECGenius API", version="1.0.0")
 
+_origins = os.environ.get(
+    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -48,6 +63,13 @@ mapper   = OntologyMapper(ontology_dir=ONTOLOGY_DIR)
 executor = RuleExecutor(rules_dir=RULES_DIR, strict=False)
 encoder  = HistoryEncoder(history_module_dir=HISTORY_DIR)
 fusion   = DecisionFusion()
+
+# CPT table (history_rules.csv) drives Naive-Bayes fusion — load once at startup
+# so /diagnose produces the same posteriors as run_pipeline.py.
+_CPT_PATH = Path(HISTORY_DIR) / "history_rules.csv"
+CPT_TABLE = pd.read_csv(str(_CPT_PATH), comment="#") if _CPT_PATH.exists() else None
+if CPT_TABLE is None:
+    logger.warning("history_rules.csv not found at %s — NB fusion disabled.", _CPT_PATH)
 
 
 # ── Request / Response models ─────────────────────────────────────────────────
@@ -112,7 +134,8 @@ def diagnose(req: DiagnoseRequest):
         label_ids            = [r.label_id for r in results]
         history_deltas       = encoder.encode_all(label_ids, patient)
         output               = fusion.fuse(results, history_deltas,
-                                           derived_log, patient, req.patient_id)
+                                           derived_log, patient, req.patient_id,
+                                           cpt_table=CPT_TABLE)
 
         return _serialize_output(output)
 

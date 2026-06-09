@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# Tests & evaluation
+tests/
+evaluation/
+
+# Training & model weights (API takes pre-computed probs — no weights needed)
+training/
+models/
+*.pt
+*.zip
+
+# Raw & processed data (mounted as volumes in production if needed)
+data/
+
+# Dev tools & docs
+scripts/
+docs/
+paper/
+ethics/
+ui/
+
+# IDE / OS
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+settings.local.json
