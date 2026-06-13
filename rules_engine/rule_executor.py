@@ -363,6 +363,13 @@ class RuleExecutor:
     strict : bool
         If True, raise ValueError on unknown rule_type.
         If False (default), warn and skip.
+    mongo_uri : str | None
+        If set, rules are loaded from MongoDB first; on connection failure
+        or an empty collection, falls back to the local CSV.
+    mongo_db_name : str | None
+        Database name. If omitted, uses the database embedded in mongo_uri.
+    mongo_collection : str
+        Collection holding rule documents (see _load_rules_from_mongo).
     """
 
     # Expose registry so callers can check or extend it
@@ -373,9 +380,19 @@ class RuleExecutor:
         """Allow external code to register new handlers at runtime."""
         return register(rule_type)
 
-    def __init__(self, rules_dir: str | Path = "rules_engine/", strict: bool = False):
+    def __init__(
+        self,
+        rules_dir: str | Path = "rules_engine/",
+        strict: bool = False,
+        mongo_uri: Optional[str] = None,
+        mongo_db_name: Optional[str] = None,
+        mongo_collection: str = "ontologyenginerules",
+    ):
         self.rules_dir = Path(rules_dir)
         self.strict = strict
+        self.mongo_uri = mongo_uri
+        self.mongo_db_name = mongo_db_name
+        self.mongo_collection = mongo_collection
         self._rules: list[RuleRow] = []
         self._load_rules()
         logger.info(
@@ -453,8 +470,8 @@ class RuleExecutor:
 
     def _load_rules(self) -> None:
         """
-        Load rules from rules_engine/rule_definitions/*.py files (auto-import)
-        then parse rules.csv.
+        Load rules from rules_engine/rule_definitions/*.py files (auto-import),
+        then load rule rows — from MongoDB if configured, else from CSV.
 
         Auto-import lets experts drop a new file like
         `rules_engine/rule_definitions/conduction_rules.py` and have its
@@ -462,13 +479,23 @@ class RuleExecutor:
         """
         self._auto_import_rule_definitions()
 
-        rules_csv = self.rules_dir / "rules.csv"
-        if not rules_csv.exists():
-            # Also check ontology/ folder (rules.csv may live there)
-            rules_csv = Path("ontology") / "rules.csv"
+        if self.mongo_uri and self._load_rules_from_mongo():
+            return
 
-        if not rules_csv.exists():
-            logger.warning("rules.csv not found — no rules will be applied.")
+        # rules_v2.csv is the cardiologist-reviewed source of truth; rules.csv
+        # is kept as a last-resort fallback. Paths are anchored to rules_dir's
+        # parent (PROJECT_ROOT) so this works regardless of CWD.
+        project_root = self.rules_dir.parent
+        candidates = [
+            project_root / "ontology" / "rules_v2.csv",
+            self.rules_dir / "rules_v2.csv",
+            project_root / "ontology" / "rules.csv",
+            self.rules_dir / "rules.csv",
+        ]
+        rules_csv = next((p for p in candidates if p.exists()), None)
+
+        if rules_csv is None:
+            logger.warning("No rules CSV found — no rules will be applied.")
             return
 
         with open(rules_csv, newline="", encoding="utf-8") as f:
@@ -490,6 +517,60 @@ class RuleExecutor:
                 ))
 
         logger.info("Loaded %d rules from %s", len(self._rules), rules_csv)
+
+    def _load_rules_from_mongo(self) -> bool:
+        """
+        Load rules from a MongoDB collection (default 'ontologyenginerules').
+
+        Documents use camelCase fields matching the ECGSuite OntologyEngineRule
+        model: ruleId, ruleType, primaryLabel, relatedLabels, requiredSymptoms,
+        action, delta, active.
+
+        Returns True if rules were loaded (caller skips the CSV fallback),
+        False on any connection error or if the collection is empty.
+        """
+        client = None
+        try:
+            from pymongo import MongoClient
+            client = MongoClient(self.mongo_uri, serverSelectionTimeoutMS=3000)
+            db = (
+                client[self.mongo_db_name]
+                if self.mongo_db_name
+                else client.get_default_database()
+            )
+            docs = list(db[self.mongo_collection].find({"active": {"$ne": False}}))
+        except Exception as exc:
+            logger.warning(
+                "Could not load rules from MongoDB (%s) — falling back to CSV.", exc
+            )
+            return False
+        finally:
+            if client is not None:
+                client.close()
+
+        if not docs:
+            logger.warning(
+                "MongoDB collection '%s' returned no rules — falling back to CSV.",
+                self.mongo_collection,
+            )
+            return False
+
+        for doc in docs:
+            self._rules.append(RuleRow(
+                rule_id=doc.get("ruleId", "?"),
+                rule_type=(doc.get("ruleType") or "").strip().lower(),
+                primary_label=(doc.get("primaryLabel") or "").strip(),
+                related_labels=[str(x).strip() for x in (doc.get("relatedLabels") or [])],
+                required_symptoms=[str(x).strip() for x in (doc.get("requiredSymptoms") or [])],
+                action=(doc.get("action") or "").strip(),
+                delta=float(doc.get("delta", 0) or 0),
+            ))
+
+        logger.info(
+            "Loaded %d rules from MongoDB collection '%s'",
+            len(docs), self.mongo_collection,
+        )
+        return True
 
     def _auto_import_rule_definitions(self) -> None:
         """

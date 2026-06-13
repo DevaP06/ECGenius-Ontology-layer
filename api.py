@@ -11,6 +11,9 @@ Run:
 from __future__ import annotations
 import os
 
+from dotenv import load_dotenv
+load_dotenv()  # picks up .env for local dev — no-op if absent (Docker uses env_file)
+
 # Cap BLAS thread pools before numpy/pandas/torch load — on Windows, OpenBLAS
 # sizing its pool to the CPU core count can throw "Memory allocation still
 # failed after 10 retries", especially under `uvicorn --reload`'s child process.
@@ -59,8 +62,14 @@ ONTOLOGY_DIR = str(PROJECT_ROOT / "ontology/")
 HISTORY_DIR  = str(PROJECT_ROOT / "history_module/")
 RULES_DIR    = str(PROJECT_ROOT / "rules_engine/")
 
+MONGO_URI     = os.environ.get("MONGO_URI")
+MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME")  # optional; URI usually embeds the db
+
 mapper   = OntologyMapper(ontology_dir=ONTOLOGY_DIR)
-executor = RuleExecutor(rules_dir=RULES_DIR, strict=False)
+executor = RuleExecutor(
+    rules_dir=RULES_DIR, strict=False,
+    mongo_uri=MONGO_URI, mongo_db_name=MONGO_DB_NAME,
+)
 encoder  = HistoryEncoder(history_module_dir=HISTORY_DIR)
 fusion   = DecisionFusion()
 
