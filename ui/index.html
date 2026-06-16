@@ -644,14 +644,10 @@ function App() {
     setSelected(null);
 
     try {
-      let body, url;
-      if (apiMode === 'mock') {
-        url  = `${API}/diagnose/mock`;
-        body = { patient, patient_id: patientId };
-      } else {
-        url  = `${API}/diagnose`;
-        body = { model_output: JSON.parse(modelOutput), patient, patient_id: patientId };
-      }
+      // Both modes hit /diagnose. In 'mock' mode we send the demo modelOutput
+      // default (client-side sample data); 'real' mode sends user-supplied JSON.
+      const url  = `${API}/diagnose`;
+      const body = { model_output: JSON.parse(modelOutput), patient, patient_id: patientId };
 
       const res  = await fetch(url, {
         method:  'POST',

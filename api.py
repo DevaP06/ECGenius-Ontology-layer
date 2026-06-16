@@ -93,11 +93,11 @@ class DiagnoseRequest(BaseModel):
     patient:      PatientHistory
     patient_id:   Optional[str] = "unknown"
     threshold:    Optional[float] = 0.10
-
-class MockRequest(BaseModel):
-    patient:    PatientHistory
-    patient_id: Optional[str] = "PT_DEMO"
-
+    # Optional pre-computed evidence flags ({feature: bool}) for Naive-Bayes
+    # fusion. Callers that already have derived flags (e.g. the clinical-context
+    # wizard sends hr_gt_100 / sbp_lt_90 directly rather than raw vitals) pass
+    # them here; when omitted, fusion derives them from `patient` internally.
+    patient_evidence: Optional[dict[str, bool]] = None
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -144,32 +144,14 @@ def diagnose(req: DiagnoseRequest):
         history_deltas       = encoder.encode_all(label_ids, patient)
         output               = fusion.fuse(results, history_deltas,
                                            derived_log, patient, req.patient_id,
-                                           cpt_table=CPT_TABLE)
+                                           cpt_table=CPT_TABLE,
+                                           patient_evidence=req.patient_evidence)
 
         return _serialize_output(output)
 
     except Exception as e:
         logger.error("Pipeline error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/diagnose/mock")
-def diagnose_mock(req: MockRequest):
-    """Same pipeline but with hardcoded mock model probabilities."""
-    mock_output = {
-        "STEMI":        0.74,
-        "AF":           0.42,
-        "NSR":          0.61,
-        "ST_Elevation": 0.80,
-        "LVH":          0.38,
-        "VF":           0.19,
-    }
-    full_req = DiagnoseRequest(
-        model_output=mock_output,
-        patient=req.patient,
-        patient_id=req.patient_id,
-    )
-    return diagnose(full_req)
 
 
 # ── Serialiser ────────────────────────────────────────────────────────────────
