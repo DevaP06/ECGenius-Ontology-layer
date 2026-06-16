@@ -1,0 +1,19 @@
+# Render Blueprint — ECG ontology / rules layer (FastAPI, no torch).
+# Private service: only ml-api calls it (POST /diagnose).
+# Apply: Render Dashboard → New → Blueprint → connect this repo.
+services:
+  - type: pserv                 # private service (internal-only)
+    name: ecg-ontology          # internal hostname → http://ecg-ontology:8002
+    runtime: docker
+    region: singapore           # MUST match the other two services
+    plan: starter               # lean (no torch); 512 MB is enough
+    rootDir: .
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: PORT               # container CMD listens on 8002
+        value: "8002"
+      - key: MONGO_URI          # secret — set in the Render dashboard (not committed)
+        sync: false
+      - key: MONGO_DB_NAME      # use the existing Atlas "test" db (where rules were seeded)
+        value: test
