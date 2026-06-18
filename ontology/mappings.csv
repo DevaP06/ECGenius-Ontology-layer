@@ -28,3 +28,7 @@ Wide_QRS,164946000,R94.31,General,ECG finding — LBBB vs RBBB vs VT vs hyperkal
 Short_PR,16838951000119100,R94.31,General,ECG finding — WPW pre-excitation vs accelerated AV conduction vs LGL
 TWI,251200008,R94.31,General,Wellens Pattern A (biphasic V2-V3) = proximal LAD occlusion warning — urgent troponin
 PVC,413996008,I49.3,General,Frequent PVCs (>10%) in CAD context increase VT risk — structural disease workup
+RVH,89792004,I51.7,General,VERIFY CODES — Sokolow RVH criteria — R/S>1 in V1 — right axis deviation — consider pulmonary cause
+RAE,446813000,I51.7,General,VERIFY CODES — P pulmonale — peaked P >2.5mm in lead II — consider pulmonary or tricuspid disease
+PAC,284470004,I49.1,General,VERIFY CODES — atrial premature complex — benign — reduce stimulants — Holter if frequent
+Pathological_Q_Waves,1755008,I25.2,General,VERIFY CODES — Q waves suggest prior MI — compare priors — cannot exclude acute event from ECG alone

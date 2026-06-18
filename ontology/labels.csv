@@ -39,3 +39,7 @@ Wide_QRS,Wide_QRS_Pattern,ECG_Pattern,Pattern,QRS duration >120ms — evaluate f
 Short_PR,Short_PR_Pattern,ECG_Pattern,Pattern,PR interval <120ms — possible pre-excitation (WPW),TRUE
 TWI,T_Wave_Inversion_Pattern,ECG_Pattern,Pattern,T-wave inversion in precordial leads — evaluate for ischaemia or Wellens pattern,TRUE
 PVC,Premature_Ventricular_Complex,ECG_Pattern,Pattern,Premature wide QRS beat of ventricular origin — evaluate for structural disease if frequent,TRUE
+RVH,Right_Ventricular_Hypertrophy,Structural,Structure,Right axis deviation with dominant R in V1 and deep S in V5-V6 — evaluate for pulmonary or congenital cause,TRUE
+RAE,Right_Atrial_Enlargement,Structural,Structure,Tall peaked P waves >2.5mm in lead II (P pulmonale) — evaluate for pulmonary or tricuspid disease,TRUE
+PAC,Premature_Atrial_Complex,ECG_Pattern,Pattern,Premature narrow-QRS beat of atrial origin — usually benign — evaluate if frequent or symptomatic,TRUE
+Pathological_Q_Waves,Pathological_Q_Waves,Ischemia,Ischemia,Q waves >40ms or >25% of R-wave amplitude — suggests prior or established myocardial infarction,TRUE

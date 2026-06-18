@@ -1,0 +1,354 @@
+{
+  "_comment": "Coverage audit across the 3 ECG label vocabularies. status: OK=produces questions, NO_QUESTIONS=valid dx but no questionnaire entry, UNMAPPED=no ontology mapping (intentional \u2014 no safe ontology counterpart, pending cardiologist review), BROKEN_MAPPING=mapped to non-existent ontology label.",
+  "generated_at": "2026-06-18",
+  "sources": {
+    "model_classes": "ECGSuite/backend/ml/models/v2/models/classes.json",
+    "model_to_ontology_map": "ECGSuite/backend/ml/label_mapping.json (mirror: frontend src/data/labelMapping.ts)",
+    "ontology_diagnoses": "ECGenius-Ontology-layer/ontology/labels.csv (is_leaf=TRUE)",
+    "questionnaire_schema": "ECGSuite/frontend/ECGenius_frontend/src/data/historySchema.ts"
+  },
+  "summary": {
+    "model_classes": 45,
+    "model_classes_mapped": 31,
+    "ontology_diagnoses": 33,
+    "questionnaire_entries": 33,
+    "model_classes_producing_questions": 31
+  },
+  "model_to_ontology_to_questionnaire": [
+    {
+      "model_label": "1AVB",
+      "ontology_label": "Heart_Block_1st",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "2AVB",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "2AVB1",
+      "ontology_label": "Heart_Block_2nd_MobitzI",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "3AVB",
+      "ontology_label": "Heart_Block_3rd",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "AF",
+      "ontology_label": "Atrial_Flutter",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "AFIB",
+      "ontology_label": "AF",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "ALS",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "APB",
+      "ontology_label": "PAC",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "AQW",
+      "ontology_label": "Pathological_Q_Waves",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "ARS",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "AT",
+      "ontology_label": "SVT",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "AVB",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "AVRT",
+      "ontology_label": "SVT",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "CCR",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "CR",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "ERV",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "IVB",
+      "ontology_label": "Wide_QRS",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "JEB",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "LFBBB",
+      "ontology_label": "LBBB",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "LVH",
+      "ontology_label": "LVH",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "LVQRSAL",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "MISW",
+      "ontology_label": "Pathological_Q_Waves",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "PRIE",
+      "ontology_label": "Heart_Block_1st",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "PWC",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "QTIE",
+      "ontology_label": "Long_QT",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "RAH",
+      "ontology_label": "RAE",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "RBBB",
+      "ontology_label": "RBBB",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "RVH",
+      "ontology_label": "RVH",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "SA",
+      "ontology_label": "Irregular_RR",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "SB",
+      "ontology_label": "Sinus_Bradycardia",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "SR",
+      "ontology_label": "NSR",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "ST",
+      "ontology_label": "Sinus_Tachycardia",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "STDD",
+      "ontology_label": "ST_Depression",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "STE",
+      "ontology_label": "ST_Elevation",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "STTC",
+      "ontology_label": "ST_Depression",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "STTU",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "SVT",
+      "ontology_label": "SVT",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "TWC",
+      "ontology_label": "TWI",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "TWO",
+      "ontology_label": "TWI",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "UW",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "VEB",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "VFW",
+      "ontology_label": null,
+      "in_ontology_labels_csv": false,
+      "has_questionnaire_entry": false,
+      "status": "UNMAPPED"
+    },
+    {
+      "model_label": "VPB",
+      "ontology_label": "PVC",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "VPE",
+      "ontology_label": "Short_PR",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    },
+    {
+      "model_label": "WPW",
+      "ontology_label": "Short_PR",
+      "in_ontology_labels_csv": true,
+      "has_questionnaire_entry": true,
+      "status": "OK"
+    }
+  ],
+  "gaps": {
+    "unmapped_model_classes": [
+      "2AVB",
+      "ALS",
+      "ARS",
+      "AVB",
+      "CCR",
+      "CR",
+      "ERV",
+      "JEB",
+      "LVQRSAL",
+      "PWC",
+      "STTU",
+      "UW",
+      "VEB",
+      "VFW"
+    ],
+    "mapped_but_no_questionnaire": [],
+    "ontology_dx_without_questionnaire": []
+  }
+}

@@ -28,3 +28,7 @@ Wide_QRS,3,ECG pattern finding — evaluate for BBB or ventricular rhythm,Clinic
 Short_PR,3,ECG pattern finding — possible pre-excitation or WPW,Clinical assessment — electrophysiology referral if symptomatic,TRUE
 TWI,2,ECG pattern finding — T-wave inversion in precordial leads — evaluate for Wellens pattern or posterior ischaemia,Serial ECG — troponin — urgent cardiology if V2-V3 biphasic (Wellens Pattern A),TRUE
 PVC,3,ECG pattern finding — premature ventricular complex — assess frequency and structural disease context,Holter monitoring if frequent (>10%) — echo — assess for structural heart disease,TRUE
+RVH,3,Chronic structural finding — commonly pulmonary hypertension COPD or congenital heart disease,Outpatient cardiology — echocardiogram — evaluate pulmonary cause,TRUE
+RAE,3,Chronic structural finding — commonly pulmonary or tricuspid valve disease,Outpatient evaluation — echocardiogram — assess pulmonary cause,TRUE
+PAC,3,Usually benign atrial ectopy — assess frequency and symptoms,Reassurance — reduce stimulants — Holter if frequent or symptomatic,TRUE
+Pathological_Q_Waves,2,Suggests prior MI but an acute event cannot be excluded from ECG alone,Compare with prior ECGs — clinical correlation — troponin if symptomatic — cardiology review,TRUE
