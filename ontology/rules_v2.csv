@@ -20,11 +20,6 @@ V2,derived,TWI,NSTEMI,chest_pain,add_label,0.35
 # Reference: de Winter et al., NEJM 2008
 V3,derived,ST_Depression,STEMI,chest_pain,add_label,0.30
 
-
-# When model sees both ST_Elevation and ST_Depression simultaneously
-# Reciprocal ST depression supports STEMI diagnosis
-V4,derived,ST_Elevation,STEMI,,boost_confidence,0.10
-
 # Posterior MI: ST depression in V1-V4 may represent posterior STEMI
 # Boost NSTEMI → STEMI when high Pai on ST_Depression without clear lateral elevation
 V5,downgrade,ST_Depression,,no_chest_pain,reduce_score,-0.12
